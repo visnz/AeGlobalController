@@ -18,3 +18,8 @@ a global controller script with autoSync of all After Effects CompItem
 ## warning
 
 英文版暂未支持，可手动修改源码中文字符到英文。
+
+## 关于我
+[个人网页](https://v.guediao.top)
+QQ: 864689103
+BilibiliID: DDL水桶
