@@ -1,4 +1,4 @@
-﻿// 全局同步属性控制器v2.1.2  by 水桶
+// 全局同步属性控制器v2.1.2  by 水桶
 //         插件通过提供所有合成的控制器同步、对当前选中属性抽出放入控制器
 //         来完成如运动统一、配色统一等进行统一控制的功能
 //
@@ -12,6 +12,7 @@ UI(this);
 var alertMsg=true   // AlertMsg提醒模式，打开时操作会有alert提示
 var autoSync=false  // AutoSync自动同步模式，打开时每隔一段时间进行检查更新
 var debugMode=false // 纠错模式，打开时会出现运行时提示
+var logObj;
 function UI(object){
     var myPalette = (object instanceof Panel)?object : new Window("palette","控制器2.1.2", undefined, {resizeable: true})
     var content=""+
@@ -78,12 +79,29 @@ function UI(object){
                 "outfun2: Button {text:'Jump', alignment:['fill','top'], preferredSize:[30,25]},"+
             "},"+
         "},"+
+        "logGroup: Group {text:'log功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
+            "textme: StaticText {text:''},"+
+            "textme: StaticText {text:'Log面板'},"+
+            "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
+                "logTrigger: Button {text:'log面板', alignment:['fill','top'], preferredSize:[50,25]},"+
+                "clear: Button {text:'清除log', alignment:['fill','top'], preferredSize:[50,25]},"+
+            "},"+
+            "log: EditText {text:'script start',properties:{multiline:true}, preferredSize:[300,200]},"+
+            "},"+
+        "},"+
     "}"
     // 创建面板
     myPalette.grp = myPalette.add(content);
     myPalette.grp.add("statictext",undefined,"Made By 水桶")
     myPalette.grp.add("statictext",undefined,"更多：v.guediao.top")
+    logObj=myPalette.grp.logGroup.log
+    logObj.visible=false
+    myPalette.grp.logGroup.line1.logTrigger.onClick=function(){
+        logObj.visible=!logObj.visible
+        myPalette.grp.logGroup.line1.clear=!myPalette.grp.logGroup.line1.clear
+    }
     // 链接事件
+    myPalette.grp.logGroup.line1.clear.onClick=function clearLog(){logObj.text=""}
     myPalette.grp.secondGroup.line1.button6.onClick=createAll
     myPalette.grp.secondGroup.line2.button7.onClick=sync
     myPalette.grp.secondGroup.line1.button8.value=true
@@ -119,6 +137,7 @@ function UI(object){
     if (myPalette != null && myPalette instanceof Window) {
         myPalette.center()
         myPalette.show();
+        log("panel inited")
     }
 }
 function addEffects(effectName){
@@ -285,15 +304,53 @@ function hasChanged(){
     }
     return false
 }
-app.scheduleTask('if(autoSync&&hasChanged())sync()',1000,true)
+
+var compCount=nowCompCount()
+log("compCount="+compCount)
+
+function nowCompCount(){
+    var count=0
+    for(var i=1;i<=app.project.items.length;i++){
+        if(app.project.items[i] instanceof CompItem){
+            count++
+        }
+    }
+    // log("nowCompCount(): "+count)
+    return count||0
+}
+
+function hadNewerComp_createAll(){
+    if(nowCompCount()!=compCount){
+        compCount=nowCompCount()
+        createAll()
+        syncFrom()
+        log("hadNewerComp_createAll()")
+    }
+}
+
+function syncFrom(){
+    log("syncFrom(): ")
+    if(!app.project.activeItem)return
+    if(!app.project.activeItem.layers.byName("controlLayer"))return
+    var activeViewer=app.activeViewer 
+    // 记录当前活跃的窗口
+    // 统计更新的合成数
+    var comps=getControlComps()
+    if(autoSync){
+        app.project.activeItem.layers.byName("controlLayer").remove()
+        comps[0].layers.byName("controlLayer").copyToComp(app.project.activeItem)
+    }
+    activeViewer.setActive() 
+}
+
+app.scheduleTask('hadNewerComp_createAll();if(autoSync&&hasChanged())sync()',1000,true)
 // app.scheduleTask('if(autoSync)sync()',1000,true)
 
 function sync(){
     // 同步函数
-    if(debugMode)alert("sync()")
+    log("sync()")
     if(!app.project.activeItem)return
     if(!app.project.activeItem.layers.byName("controlLayer"))return
-    app.beginUndoGroup("Sync controller config");
     var activeViewer=app.activeViewer 
     // 记录当前活跃的窗口
     var createTimes=0 
@@ -314,7 +371,6 @@ function sync(){
     // 激活原来活跃的面板
     oldProper=record()
     // 更新原型
-    app.endUndoGroup();
 }
 function getControlComps(){
     var comps=[]
@@ -345,8 +401,10 @@ function createAll(){
     // return layers
 }
 
-
-
+//============ log ==========//
+function log(content){
+    logObj.text=logObj.text+"\n[ "+(new Date().toTimeString().split(" ")[0])+" ]"+content
+}
 
 //============ outfun ==========//
     //============ Motion 2 ==========//
@@ -639,5 +697,3 @@ function getCurProperNameFully(){
     content+=")"
     return content
 }
-// update log
-//2.1.1修改了没有控制器图层按快速创建时候返回null的错误，补充全部创建
