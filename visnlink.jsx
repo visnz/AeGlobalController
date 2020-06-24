@@ -24,6 +24,14 @@ function UI(object){
                 "apply: Button {text:'Apply', alignment:['fill','top'], preferredSize:[30,25]},"+
             "},"+
         "},"+
+        "webGroup: Group {text:'web功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
+            "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
+                "preset: DropDownList{alignment:['fill','top'], preferredSize:[100,25]},"+
+                "url: EditText {text:'url', alignment:['fill','top'],properties:{multiline:false}, preferredSize:[300,25]},"+
+                "filter: EditText {text:'filter', alignment:['fill','top'],properties:{multiline:false}, preferredSize:[100,25]},"+
+                "send: Button {text:'Get Web', alignment:['fill','top'], preferredSize:[30,25]},"+
+            "},"+
+        "},"+
         "logGroup: Group {text:'log功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
             //"textme: StaticText {text:''},"+
             "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
@@ -51,6 +59,7 @@ function UI(object){
         var r = ((res >> 16) & 255)/255;
         var g = ((res >> 8) & 255)/255;
         var b = (parseInt(res,10) & 255)/255;
+
         colorQueue.push([r,g,b])
         for(var i=colorQueue.length-1;;i--){
             var index=colorQueue.length-1-i
@@ -58,16 +67,53 @@ function UI(object){
             if(index>=15)break;
         }
         log("new color pushed: "+res)
+        saveObjTo(colorQueue,"C:/temp/Aescript_visnlink_tempdata.json")
+
     }
+    var savedColors=loadObjFrom("C:/temp/Aescript_visnlink_tempdata.json")
     var colorQueue=[]
     var colorPanels=[]
     for(var i=0;i<16;i++){
         colorPanels[i] = myPalette.grp.colorGroup.line1.add("panel", [0,0,25,25], i);
-        colorQueue.push([0.01*i,0.03*i,0.06*i])
-        colorPanels[i].graphics.backgroundColor = colorPanels[i].graphics.newBrush(colorPanels[i].graphics.BrushType.SOLID_COLOR,colorQueue[i]);
-    }  
-    colorQueue=colorQueue.reverse()
-
+        if(!savedColors){
+            colorQueue.push([0.01*i,0.03*i,0.06*i])
+            colorPanels[i].graphics.backgroundColor = colorPanels[i].graphics.newBrush(colorPanels[i].graphics.BrushType.SOLID_COLOR,colorQueue[i]);
+        }else{
+            colorPanels[i].graphics.backgroundColor = colorPanels[i].graphics.newBrush(colorPanels[i].graphics.BrushType.SOLID_COLOR,savedColors[savedColors.length-i-1]);
+        }
+    }
+    if(savedColors){
+        colorQueue=savedColors
+    }else{
+        colorQueue=colorQueue.reverse()
+    }
+    // web界面
+    myPalette.grp.webGroup.line1.preset.add('item',"预设（还没开发）")
+    myPalette.grp.webGroup.line1.send.onClick=function(){
+        if(myPalette.grp.webGroup.line1.url.text=="url"||myPalette.grp.webGroup.line1.filter.text=="filter")return;
+        if(myPalette.grp.webGroup.line1.url.text!=""){
+            var readState_body=redirect(myPalette.grp.webGroup.line1.url.text).body
+            if(myPalette.grp.webGroup.line1.filter.text!=""){
+                log(urlFilter(readState_body,myPalette.grp.webGroup.line1.filter.text))
+            }else{
+                log(readState_body)
+            }
+        }else{
+            // log("web: preset part")
+            // switch(myPalette.grp.webGroup.line1.preset.selection.text){
+            //     // case "程序员老黄历":
+            //     //     log("程序员老黄历")
+            //     //     webFunc_getProgrammerCal(redirect("http://xuexinyu.com/mypages/coder.html").body)
+            //     //     break;
+            //     case "中午吃什么":
+            //         log("中午吃什么")
+            //         break;
+            //     case "微博热搜":
+            //         log("微博热搜")
+            //         break;
+            // }
+        }
+    }
     // log界面
     logObj=myPalette.grp.logGroup.line2.log
     // logObj.visible=false
@@ -486,37 +532,6 @@ function addEffects(effectName){
     }}
     return true
 }
-// function transENtoSC(en,invert){
-//     dicInitNow()
-//     log("transENtoSC param: ",en)
-//     var result=new Array();
-//     for(var ind = 0; ind < dictionarykeys.length; ind++ ){
-//         var textToCompare=dictionary[ind][invert?1:0]
-//         // console.log(now, "dictionary.get(now.value): "+dictionary.get(now.value),"   textToCompare: ",textToCompare)
-//         for (var i = 0; i < textToCompare.length; i++) {
-//             var com=0
-//             var tmpcheck=0
-//             for (var j = 0; j < en.length; j++) {
-//                 if(new String(textToCompare[i]).toUpperCase()!=en[j].toUpperCase()){
-//                     i-=tmpcheck;
-//                     break;
-//                 }
-//                 com++;
-//                 i++;
-//                 tmpcheck++;
-//                 if(com==en.length){
-//                     if(invert){
-//                         result.push([dictionary[ind][1],dictionary[ind][0]])
-//                     }else{
-//                         result.push(dictionary[ind])
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     log(result)
-//     return result
-// }
 function objInside(obj){
     var seen = []
     var keys = []
@@ -551,4 +566,132 @@ function objInsideSimple(obj){
         return val;
     });
     return seen
+}
+function redirect(url) {
+    url = url.replace(/([a-z]*):\/\/([-\._a-z0-9A-Z]*)(:[0-9]*)?\/?(.*)/, "$1/$2/$3/$4");
+    url = url.split("/");
+    if (url[2] == "undefined") {
+        url[2] = "80"
+    }
+    var parsedURL = {
+        protocol: url[0].toUpperCase(),
+        host: url[1],
+        port: url[2],
+        path: ""
+    };
+    url = url.slice(3);
+    parsedURL.path = url.join("/");
+    if (parsedURL.port.charAt(0) == ":") {
+        parsedURL.port = parsedURL.port.slice(1);
+    }
+    if (parsedURL.port != "") {
+        parsedURL.port = parseInt(parsedURL.port);
+    }
+    if (parsedURL.port == "" || parsedURL.port < 0 || parsedURL.port > 65535) {
+        parsedURL.port = 80;
+    }
+    parsedURL.path = parsedURL.path;
+    var request = "GET /" + parsedURL.path + " HTTP/1.1\n" + "Host: " + parsedURL.host + "\n" + "User-Agent: Adobe ExtendScript\n" + "Accept: text/xml,text/*,*/*\n" + "Accept-Encoding:\n" + "Connection: close\n" + "Accept-Language: *\n" + "Accept-Charset: utf-8\n\n";
+    var readState = {
+        sector: 0,
+        dataAvailable: true,
+        line: "",
+        buffer: "",
+        headers: "",
+        status: "",
+        body: ""
+    };
+    socket = null;
+    var socket = new Socket();
+    if (!socket.open(parsedURL.host + ":" + parsedURL.port, "UTF-8")) {
+        return false;
+    }
+    socket.write(request);
+    var regEx = {
+        status: /^\s*(?:HTTP\/\d\.\d\s)(\d+)\s*(.*)\s*$/
+    };
+    $.hiresTimer;
+    while (!socket.eof) {
+        if (($.hiresTimer / 1000000) > 2) {
+            socket.close();
+            socket = null;
+            break;
+            return false;
+        }
+        if (!socket.connected && !readState.dataAvailable) {
+            socket.close();
+            socket = null;
+            break;
+            return null;
+        }
+        readState.line = socket.readln();
+        if (regEx.status.test(readState.line)) {
+            var match = readState.line.match(regEx.status);
+            readState.status = match[1] + " ::: " + match[2];
+        }
+        readState.buffer += readState.line + "\n";
+        readState.dataAvailable = readState.buffer.length > 0;
+    }
+    socket.close();
+    var b = readState.buffer.split("\n\n");
+    readState.headers = b[0];
+    readState.body = b.slice(1).join("\n");
+    // log("readState.headers: "+readState.headers)
+    log("readState.body: "+readState.body.length)
+    return readState;
+}
+// function webFunc_getProgrammerCal(readState_body){
+//     var startIn = readState_body.indexOf("<div class=\"date\">");
+//     var endIn = readState_body.indexOf("<li>此页面代码非作者原创</li>", startIn);
+//     readState_body = readState_body.substr(startIn, endIn - startIn);
+//     log(readState_body.length)
+//     log(readState_body)
+//     // var readState_body=readState_body.split("\n")
+    
+//     var date=/今天是[0-9][0-9][0-9][0-9]年(1?)[0-9]月((1|2|3)?)[0-9]日\ 星期(日|一|二|三|四|五|六)/i;
+//     log("Date:"+date.exec(readState_body))
+
+// }
+function urlFilter(readState_body,keyword){
+    var result=[]
+    var docu=readState_body.split("\n")
+    for(var ind=0;ind<docu.length;ind++){
+        var textToCompare=docu[ind]
+        for (var i = 0; i < textToCompare.length; i++) {
+            var com=0
+            var tmpcheck=0
+            for (var j = 0; j < keyword.length; j++) {
+                if(new String(textToCompare[i]).toUpperCase()!=keyword[j].toUpperCase()){
+                    i-=tmpcheck;
+                    break;
+                }
+                com++;
+                i++;
+                tmpcheck++;
+                if(com==keyword.length){
+                    result.push(docu[ind])
+                    log(docu[ind])
+                }
+            }
+        }
+    }
+    return result
+}
+function saveObjTo(obj,path){
+    var objs=JSON.stringify(obj)
+    var myFile = new File(path);
+    myFile.open("w");
+    myFile.write(objs);
+    myFile.close();
+    log("write successfully: "+path)
+}
+function loadObjFrom(path){
+    var myFile = new File(path);
+    myFile.open("r");
+    var objs=myFile.read();
+    // log("obj: "+objs)
+    var obj=JSON.parse(objs)
+    myFile.close();
+    // log("read successfully: "+path)
+    return obj
 }
