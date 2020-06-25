@@ -6,22 +6,64 @@ var dictionarykeys;
 var dicInit=false;
 var debugMode=true; // 纠错模式，打开时会出现运行时提示
 var logObj;
+var rd_ScriptLauncherData = new Object();
+rd_ScriptLauncherData.scriptPath = "";
+rd_ScriptLauncherData.scriptFiles = new Array();
+var scriptManagerObj;
 function UI(object){
     var myPalette = (object instanceof Panel)?object : new Window("palette","桶子工具箱", undefined, {resizeable: true})
     var content=""+
     "group {orientation:'column', alignment:['fill','fill'], spacing:5, "+
-        "textme: StaticText {text:'桶子工具箱'},"+
-        "colorGroup: Group {text:'color功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
+        "textme: Button {text:'桶子工具箱',alignment:['fill','top']},"+
+        "outsideGroup: Group {text:'iconBtn功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
             "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:0 ,"+
+                "lineA: Panel {text:'脚本管理器', alignment:['fill','top'], orientation:'column', spacing:0 ,"+
+                    "tlistBox: ListBox { alignment:['fill','fill'], preferredSize:[100,200]},"+
+                    "tfooter: Group { talignment:['fill','bottom'], "+
+                        "tfolder: Button { text:'Folder', alignment:['left','center'] }, "+
+                        "trefresh: Button { text:'刷新', alignment:['right','center'] }, "+
+                    "},"+
+                "},"+
+                "lineB: Panel {text:'集成脚本', alignment:['fill','top'], orientation:'column', spacing:0 ,"+
+                    "multi1: Button { text:'multi1', preferredSize:[100,25] }, "+
+                "},"+
+            "},"+
+        "},"+
+        "colorGroup: Panel {text:'色板', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
+            "line1: Group {text:'色板', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
             "},"+
         "},"+
         "transGroup: Group {text:'trans功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
-            "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
+            "line1: Panel {text:'中英查找', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
                 "search: EditText {text:'', alignment:['fill','top'],properties:{multiline:false}, preferredSize:[100,30]},"+
                 "sc2enB: Button {text:'SCtoEN', alignment:['fill','top'], preferredSize:[30,25]},"+
                 "en2scB: Button {text:'ENtoSC', alignment:['fill','top'], preferredSize:[30,25]},"+
                 "listbox: DropDownList{alignment:['fill','top'], preferredSize:[200,25]},"+
                 "apply: Button {text:'Apply', alignment:['fill','top'], preferredSize:[30,25]},"+
+            "},"+
+        "},"+
+
+        "logGroup: Panel {text:'调试器', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
+            //"textme: StaticText {text:''},"+
+            "line2: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
+                "log: EditText {text:'script start',properties:{multiline:true}, alignment:['fill','top'], preferredSize:[300,200]},"+
+            "},"+
+            "line3: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:0 ,"+
+                "textme: StaticText {text:'2. 开发者功能：',alignment:['fill','top']},"+
+            "},"+
+            "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
+                // "textme: StaticText {text:'Log面板'},"+
+                "logTrigger: Button {text:'Log', alignment:['fill','top'], preferredSize:[50,25]},"+
+                "clear: Button {text:'Clean', alignment:['fill','top'], preferredSize:[50,25]},"+
+                "console: EditText {text:'', alignment:['fill','top'],properties:{multiline:false}, preferredSize:[300,30]},"+
+                "run: Button {text:'AeRun', alignment:['fill','top'], preferredSize:[50,25]},"+
+                "cmdexample: DropDownList{alignment:['fill','top'], preferredSize:[200,25]},"+
+                "cmdrun: Button {text:'CmdRun', alignment:['fill','top'], preferredSize:[50,25]},"+
+            "},"+
+        "},"+
+        "testGroup3: Group {text:'iconBtn功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
+            "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:0 ,"+
+                "textme: StaticText {text:'3. 测试版功能：',alignment:['fill','top']},"+
             "},"+
         "},"+
         "webGroup: Group {text:'web功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
@@ -32,28 +74,60 @@ function UI(object){
                 "send: Button {text:'Get Web', alignment:['fill','top'], preferredSize:[30,25]},"+
             "},"+
         "},"+
-        "logGroup: Group {text:'log功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
-            //"textme: StaticText {text:''},"+
+        "randomGroup: Group {text:'web功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
             "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
-                // "textme: StaticText {text:'Log面板'},"+
-                "logTrigger: Button {text:'Log', alignment:['fill','top'], preferredSize:[50,25]},"+
-                "clear: Button {text:'Clean', alignment:['fill','top'], preferredSize:[50,25]},"+
-                "console: EditText {text:'', alignment:['fill','top'],properties:{multiline:false}, preferredSize:[300,30]},"+
-                "run: Button {text:'AeRun', alignment:['fill','top'], preferredSize:[50,25]},"+
-                "cmdexample: DropDownList{alignment:['fill','top'], preferredSize:[200,25]},"+
-                "cmdrun: Button {text:'CmdRun', alignment:['fill','top'], preferredSize:[50,25]},"+
-            "},"+
-            "line2: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
-                "log: EditText {text:'script start',properties:{multiline:true}, alignment:['fill','top'], preferredSize:[300,200]},"+
+                "preset: DropDownList{alignment:['fill','top'], preferredSize:[200,25]},"+
+                // "param: EditText {text:'(input,param,here)', alignment:['fill','top'],properties:{multiline:false}, preferredSize:[200,25]},"+
+                "generate: Button {text:'Generate', alignment:['fill','top'], preferredSize:[20,25]},"+
             "},"+
         "},"+
     "}"
     myPalette.grp = myPalette.add(content);
     myPalette.layout.layout(true);
+    myPalette.grp.textme.onClick=function(){
+        var res=prompt("本来想做个按钮跳转到网页可惜会线程阻塞卡死，请大哥大姐们复制，求点流量","http://v.guediao.top","气死了气死了[○･｀Д´･ ○]");
+    }
+    // var outsideGroup=myPalette.grp.outsideGroup.line1.add("scrollbar", [0,0,400,40]);
+    scriptManagerObj=myPalette.grp.outsideGroup.line1.lineA
+    scriptManagerObj.tfooter.tfolder.onClick = rd_ScriptLauncher_doSelectFolder;
+    scriptManagerObj.tfooter.trefresh.onClick = rd_ScriptLauncher_doRefreshList;
+    scriptManagerObj.tlistBox.onDoubleClick = rd_ScriptLauncher_doRun;
+    scriptManagerObj.tlistBox.preferredSize.height = 150;
+    myPalette.grp.outsideGroup.line1.lineB.multi1.onClick=function(){
+    }
+
+    // rd_ScriptLauncher(myPalette.grp.outsideGroup.line1.scriptManager);
+    // random面板
+    myPalette.grp.randomGroup.line1.preset.add('item',"随机数生成器")
+    myPalette.grp.randomGroup.line1.generate.onClick=function(){
+        if(!myPalette.grp.randomGroup.line1.preset.selection)return
+        var selectedPreset=myPalette.grp.randomGroup.line1.preset.selection.text
+        // var param=myPalette.grp.randomGroup.line1.param.text
+        // if(param[0]=="(")param=param.slice(1,param.length)
+        // param=param.split[","]
+        if(selectedPreset=="")return
+        var result
+        switch(selectedPreset){
+            case "随机数生成器":{
+                result=Math.random()
+                break
+            }
+        }
+        // var selectedPropertie=getSelectedPropertie()
+        // log(selectedPropertie)
+        // if(selectedPropertie&&selectedPropertie.canSetExpression){
+        //     log(selectedPropertie.expression)
+        //     selectedPropertie.expression=result
+        // }
+        // log(result)
+
+    }
+
     // color面板
-    var btn=myPalette.grp.colorGroup.line1.add("button",[0,0,100,25],"Push Color")
-    btn.onClick=function(){
+    var colorBtn=myPalette.grp.colorGroup.line1.add("button",[0,0,100,25],"Push Color")
+    colorBtn.onClick=function(){
         var res=prompt("hex color","#C0FFEE");
+        if(!res)return;
         res=res[0]=="#"?res.split("#")[1]:res;
         res = parseInt(res,16);
         var r = ((res >> 16) & 255)/255;
@@ -122,26 +196,30 @@ function UI(object){
         myPalette.grp.logGroup.line1.clear=!myPalette.grp.logGroup.line1.clear
     }
     myPalette.grp.logGroup.line1.clear.onClick=function clearLog(){logObj.text=""}
-    myPalette.grp.logGroup.line1.run.onClick=function run(){
-        log("console.run: "+myPalette.grp.logGroup.line1.console.text)
-        log(eval(myPalette.grp.logGroup.line1.console.text))
+    myPalette.grp.logGroup.line1.run.onClick=function (){
+        var text=myPalette.grp.logGroup.line1.console.text
+        log("console.run: "+text)
+        if(text=="")return
+        try{log(eval(myPalette.grp.logGroup.line1.console.text))}catch(e){alert(e)}
+        
         myPalette.grp.logGroup.line1.console.text=""
     }
     myPalette.grp.logGroup.line1.cmdexample.add('item',"notepad")
     myPalette.grp.logGroup.line1.cmdexample.add('item',"calc")
     myPalette.grp.logGroup.line1.cmdexample.add('item',"mspaint")
     myPalette.grp.logGroup.line1.cmdexample.add('item','"C:\\Program Files\\Adobe\\Adobe After Effects CC 2018\\Support Files\\AfterFX.exe" -m')
-    myPalette.grp.logGroup.line1.cmdrun.onClick=function run(){
-        var text=myPalette.grp.logGroup.line1.console.text
-        if(text=="")text=myPalette.grp.logGroup.line1.cmdexample.selection.text
+    myPalette.grp.logGroup.line1.cmdrun.onClick=function (){
+        if(!myPalette.grp.logGroup.line1.cmdexample.selection)return
+        var text=myPalette.grp.logGroup.line1.cmdexample.selection.text
         var cmdrun="system.callSystem("+"\"cmd.exe /c \\\" "+text+" \\\"\""+");"
         log("console.cmdrun: "+cmdrun)
-        log(eval(cmdrun))
-        myPalette.grp.logGroup.line1.console.text=""
+        try{log(eval(cmdrun))}catch(e){alert(e)}
     }
     // trans界面
     myPalette.grp.transGroup.line1.apply.onClick=function() {
+        if(!myPalette.grp.transGroup.line1.listbox.selection)return
         var effect=myPalette.grp.transGroup.line1.listbox.selection.text
+        if(effect=="")return
         log("Apply the effects: "+effect)
         addEffects(effect.split("【")[0])
         addEffects(effect.split("】")[1])
@@ -221,30 +299,15 @@ function UI(object){
         myPalette.show();
         log("panel inited")
     }
+    
 }
 
-var help=function(){
-    log("hello world")
-}
+var help="hello"
 
 // Lib part
 function log(content){
     logObj.text=logObj.text+"\n[ "+(new Date().toTimeString().split(" ")[0])+" ]"+content
     return content;
-}
-function getSelectedPropertie(){
-    var properties=app.project.activeItem.selectedProperties
-    if(app.project.activeItem&&properties!=""){
-        if(properties.length==1){
-        // 判断已选中项目有已选中的属性
-            return properties[0]
-        }else{
-            //效果器的话，这个属性是一个组，第一个是效果组，第二个是具体效果
-            if(properties[0] instanceof PropertyGroup){
-                return properties[1]
-            }
-        }
-    }
 }
 function getCompIndex(targetComp) {
     for (var index = 1; index <= app.project.items.length; index++) {
@@ -523,6 +586,7 @@ function dicInitNow(){
 }
 function addEffects(effectName){
     var layers=app.project.activeItem.selectedLayers
+        if(!layers){log("no layers selected");return;}
     for(var i=0;i<layers.length;i++){
         try{
         layers[i].Effects.addProperty(effectName)
@@ -677,6 +741,7 @@ function urlFilter(readState_body,keyword){
     }
     return result
 }
+
 function saveObjTo(obj,path){
     var objs=JSON.stringify(obj)
     var myFile = new File(path);
@@ -695,3 +760,150 @@ function loadObjFrom(path){
     // log("read successfully: "+path)
     return obj
 }
+// function getSelectedPropertie(){
+//     if(!app.project.activeItem)return;
+//     // log("activeItem: "+objInside(app.project.activeItem))
+//     var properties=app.project.activeItem.selectedProperties
+//     if(!properties){
+//         log("activeItem.properties: "+objInside(properties))
+//         if(properties.length==1){
+//         // 判断已选中项目有已选中的属性
+//             return properties[0]
+//         }else{
+//             //效果器的话，这个属性是一个组，第一个是效果组，第二个是具体效果
+//             if(properties[0] instanceof PropertyGroup){
+//                 return properties[1]
+//             }
+//         }
+//     }
+// }
+function objInside(obj){
+    var seen = []
+    var keys = []
+    JSON.stringify(obj, function(key, val) {
+       if (val != null && typeof val == "object") {
+            if (seen.indexOf(val) >= 0) {
+                return;
+            }
+            seen.push(val);
+            keys.push(key)
+        }
+        return val;
+    });
+    var content=""
+    for(var i=0;i<seen.length;i++){
+        content+=keys[i]+"  :  "
+        //alert(seen[i])
+        //alert((typeof seen[i] == "object"))
+        content+=seen[i].toString()+"\n"
+    }
+    return content
+}
+function objInsideSimple(obj){
+    var seen = []
+    JSON.stringify(obj, function(key, val) {
+       if (val != null && typeof val == "object") {
+            if (seen.indexOf(val) >= 0) {
+                return;
+            }
+            seen.push(val);
+        }
+        return val;
+    });
+    return seen
+}
+function rd_ScriptLauncher_doSelectFolder() {
+    var folder = Folder.selectDialog("选择AE脚本文件夹");
+    if (folder != null) {
+        rd_ScriptLauncherData.scriptPath = folder;
+        log(folder.fsName)
+        app.settings.saveSetting("redefinery", "rd_ScriptLauncher_scriptPath", folder.fsName);
+        rd_ScriptLauncher_buildScriptsList(scriptManagerObj);
+    }
+}
+
+function rd_ScriptLauncher_doRefreshList() {
+    log(app.settings.getSetting("redefinery", "rd_ScriptLauncher_scriptPath"))
+    rd_ScriptLauncher_buildScriptsList(scriptManagerObj);
+}
+
+function rd_ScriptLauncher_doRun() {
+    var scriptSelected = scriptManagerObj.tlistBox.selection != null;
+    if (scriptSelected) {
+        var scriptIndex = scriptManagerObj.tlistBox.selection.index;
+        var scriptFile = new File(rd_ScriptLauncherData.scriptFiles[scriptIndex].absoluteURI);
+        if (scriptFile.exists) {
+            $.evalFile(scriptFile)
+        } else {
+            alert("无法找到选定的脚本.", "脚本管理器")
+        }
+    }
+}
+
+function rd_ScriptLauncher_sortByName(a, b) {
+    if (a.name.toLowerCase() < b.name.toLowerCase()) {
+        return -1;
+    } else if (a.name.toLowerCase() > b.name.toLowerCase()) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+function rd_ScriptLauncher_getAEScripts(path) {
+    var pathFiles = path.getFiles();
+    var files = new Array();
+    pathFiles.sort(rd_ScriptLauncher_sortByName);
+    for (var i = 0; i < pathFiles.length; i += 1) {
+        if (pathFiles[i] instanceof Folder) {
+            if (pathFiles[i].name.match(/^\(.*\)$/)) {
+                continue;
+            } else {
+                subfiles = rd_ScriptLauncher_getAEScripts(pathFiles[i]);
+                for (var j = 0; j < subfiles.length; j += 1) {
+                    files[files.length] = subfiles[j]
+                }
+            }
+        } else {
+            if (pathFiles[i].name.match(/\.(js|jsx|jsxbin)$/) && pathFiles[i].fsName != File($.fileName).fsName) {
+                files[files.length] = pathFiles[i]
+            }
+        }
+    }
+    return files;
+}
+
+function rd_ScriptLauncher_buildScriptsList(scriptManagerObj) {
+    scriptManagerObj.tlistBox.removeAll();
+    rd_ScriptLauncherData.scriptFiles = rd_ScriptLauncher_getAEScripts(rd_ScriptLauncherData.scriptPath);
+    for (var i = 0; i < rd_ScriptLauncherData.scriptFiles.length; i += 1) {
+        fullName = rd_ScriptLauncherData.scriptFiles[i].fsName;
+        iconFile = File(fullName.replace(/.(js|jsx|jsxbin)$/, ".png"));
+        fullName = fullName.substr(rd_ScriptLauncherData.scriptPath.fsName.length + 1);
+        item =scriptManagerObj.tlistBox.add("item", fullName);
+        if (iconFile.exists) {
+            item.icon = iconFile
+        }
+    }
+}
+
+var gotScriptPath = false;
+function scriptManagerInit(){
+    if (app.settings.haveSetting("redefinery", "rd_ScriptLauncher_scriptPath")) {
+        rd_ScriptLauncherData.scriptPath = new Folder(app.settings.getSetting("redefinery", "rd_ScriptLauncher_scriptPath"));
+        gotScriptPath = true;
+    } else {
+        var folder = Folder.selectDialog("选择AE脚本文件夹位置.");
+        if (folder != null) {
+            rd_ScriptLauncherData.scriptPath = folder;
+            gotScriptPath = true;
+            app.settings.saveSetting("redefinery", "rd_ScriptLauncher_scriptPath", folder.fsName);
+        }
+    }
+    if (gotScriptPath) {
+        rd_ScriptLauncher_buildScriptsList(scriptManagerObj)
+    } else {
+        alert("无法打开文件夹,因为无法找到.", "脚本管理器")
+    }
+}
+scriptManagerInit();
