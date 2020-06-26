@@ -6,6 +6,7 @@ var dictionarykeys;
 var dicInit=false;
 var debugMode=true; // 纠错模式，打开时会出现运行时提示
 var logObj;
+var colorPanels=[]
 var rd_ScriptLauncherData = new Object();
 rd_ScriptLauncherData.scriptPath = "";
 rd_ScriptLauncherData.scriptFiles = new Array();
@@ -133,34 +134,19 @@ function UI(object){
         var r = ((res >> 16) & 255)/255;
         var g = ((res >> 8) & 255)/255;
         var b = (parseInt(res,10) & 255)/255;
-
-        colorQueue.push([r,g,b])
-        for(var i=colorQueue.length-1;;i--){
-            var index=colorQueue.length-1-i
-            colorPanels[index].graphics.backgroundColor = colorPanels[index].graphics.newBrush(colorPanels[index].graphics.BrushType.SOLID_COLOR,colorQueue[i]);
-            if(index>=15)break;
-        }
+        pushColortoPanel(colorPanelslink,[r,g,b])
         log("new color pushed: "+res)
-        saveObjTo(colorQueue,"C:/temp/Aescript_visnlink_tempdata.json")
 
+        // saveObjTo(colorQueue,"C:/temp/Aescript_visnlink_tempdata.json")
     }
-    var savedColors=loadObjFrom("C:/temp/Aescript_visnlink_tempdata.json")
-    var colorQueue=[]
-    var colorPanels=[]
-    for(var i=0;i<16;i++){
+
+    for(var i=0;i<15;i++){
         colorPanels[i] = myPalette.grp.colorGroup.line1.add("panel", [0,0,25,25], i);
-        if(!savedColors){
-            colorQueue.push([0.01*i,0.03*i,0.06*i])
-            colorPanels[i].graphics.backgroundColor = colorPanels[i].graphics.newBrush(colorPanels[i].graphics.BrushType.SOLID_COLOR,colorQueue[i]);
-        }else{
-            colorPanels[i].graphics.backgroundColor = colorPanels[i].graphics.newBrush(colorPanels[i].graphics.BrushType.SOLID_COLOR,savedColors[savedColors.length-i-1]);
-        }
     }
-    if(savedColors){
-        colorQueue=savedColors
-    }else{
-        colorQueue=colorQueue.reverse()
-    }
+    var colorPanelslink=colorPanels
+    drawColortoPanel(colorPanelslink)
+
+
     // web界面
     myPalette.grp.webGroup.line1.preset.add('item',"预设（还没开发）")
     myPalette.grp.webGroup.line1.send.onClick=function(){
@@ -742,24 +728,24 @@ function urlFilter(readState_body,keyword){
     return result
 }
 
-function saveObjTo(obj,path){
-    var objs=JSON.stringify(obj)
-    var myFile = new File(path);
-    myFile.open("w");
-    myFile.write(objs);
-    myFile.close();
-    log("write successfully: "+path)
-}
-function loadObjFrom(path){
-    var myFile = new File(path);
-    myFile.open("r");
-    var objs=myFile.read();
-    // log("obj: "+objs)
-    var obj=JSON.parse(objs)
-    myFile.close();
-    // log("read successfully: "+path)
-    return obj
-}
+// function saveObjTo(obj,path){
+//     var objs=JSON.stringify(obj)
+//     var myFile = new File(path);
+//     myFile.open("w");
+//     myFile.write(objs);
+//     myFile.close();
+//     log("write successfully: "+path)
+// }
+// function loadObjFrom(path){
+//     var myFile = new File(path);
+//     myFile.open("r");
+//     var objs=myFile.read();
+//     // log("obj: "+objs)
+//     var obj=JSON.parse(objs)
+//     myFile.close();
+//     // log("read successfully: "+path)
+//     return obj
+// }
 // function getSelectedPropertie(){
 //     if(!app.project.activeItem)return;
 //     // log("activeItem: "+objInside(app.project.activeItem))
@@ -907,3 +893,35 @@ function scriptManagerInit(){
     }
 }
 scriptManagerInit();
+
+function pushColortoPanel(colorPanels,colorFloatArray){
+    for(var i=14;i>0;i--){
+        eval('app.settings.saveSetting("visnlink", "colorPanelColors'+i+'",app.settings.getSetting("visnlink", "colorPanelColors'+(i-1)+'"))')
+    }
+    app.settings.saveSetting("visnlink", "colorPanelColors0",colorFloatArray.toString());
+    drawColortoPanel(colorPanels)
+}
+function getAllColortoPanel(){
+    var arr=[]
+    if(!app.settings.haveSetting("visnlink", "colorPanelColors14")){
+        for(var i=0;i<15;i++){
+            eval('app.settings.saveSetting("visnlink", "colorPanelColors'+i+'",[0.01*'+i+',0.03*'+i+',0.06*'+i+'].toString())')
+            arr.push([0.01*i,0.03*i,0.06*i])
+            
+        }
+    }else{
+        for(var i=0;i<15;i++){
+            eval('arr.push((app.settings.getSetting("visnlink", "colorPanelColors'+i+'")).split(","))')
+            for(var j=0;j<3;j++){
+                arr[i][j]=parseFloat(arr[i][j])
+            }
+        }
+    }
+    return arr
+}
+function drawColortoPanel(colorPanels){
+    var colorQueue=getAllColortoPanel()
+    for(var i=0;i<15;i++){
+        colorPanels[i].graphics.backgroundColor = colorPanels[i].graphics.newBrush(colorPanels[i].graphics.BrushType.SOLID_COLOR,colorQueue[i]);
+    }
+}
