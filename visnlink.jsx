@@ -27,12 +27,15 @@ function UI(object,colorPanel){
                 "},"+
                 "lineB: Panel {text:'集成脚本', alignment:['fill','top'], orientation:'column', spacing:0 ,"+
                     "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:0 ,"+
+                        "textme: StaticText {text:'keyfast'},"+
                         "Fi: Button { text:'Fi', preferredSize:[25,25] }, "+
                         "Fo: Button { text:'Fo', preferredSize:[25,25] }, "+
                         "Su: Button { text:'Su', preferredSize:[25,25] }, "+
                         "Sd: Button { text:'Sd', preferredSize:[25,25] }, "+
                         "Rl: Button { text:'Rl', preferredSize:[25,25] }, "+
                         "Rr: Button { text:'Rr', preferredSize:[25,25] }, "+
+                        "Cl: Button { text:'Cl', preferredSize:[25,25] }, "+
+                        "Rv: Button { text:'Rv', preferredSize:[25,25] }, "+
                     "},"+   
                 "},"+
             "},"+
@@ -107,6 +110,8 @@ function UI(object,colorPanel){
     myPalette.grp.outsideGroup.line1.lineB.line1.Sd.onClick=OF_Keyfast_scaleDown
     myPalette.grp.outsideGroup.line1.lineB.line1.Rl.onClick=OF_Keyfast_rotateLeft
     myPalette.grp.outsideGroup.line1.lineB.line1.Rr.onClick=OF_Keyfast_rotateRight
+    myPalette.grp.outsideGroup.line1.lineB.line1.Cl.onClick=OF_Keyfast_cloneKeys
+    myPalette.grp.outsideGroup.line1.lineB.line1.Rv.onClick=OF_Keyfast_timeReverse
 
     // rd_ScriptLauncher(myPalette.grp.outsideGroup.line1.scriptManager);
     // random面板
@@ -1261,6 +1266,250 @@ function urlFilter(readState_body,keyword){
         }
         app.endUndoGroup();
     }
+    function OF_Keyfast_timeReverse(){
+        myComp = app.project.activeItem;
+        myLayer = myComp.selectedLayers;
+        if (myLayer.length < 1) {
+            alert("Please select 2 or more keyframes to use time reverse on.");
+        }
+        app.executeCommand(3693);
+        // easeKeyframes();
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+    }
+    function OF_Keyfast_cloneKeys() {
+        function firstKey(inputLayers) {
+            if (inputLayers.length === undefined) {
+                inputLayers = [inputLayers];
+            }
+            timesArray = [];
+            for (y = 0; y < inputLayers.length; y = y + 1) {
+                thisLayer = inputLayers[y];
+                for (p = 0; p < thisLayer.selectedProperties.length; p = p + 1) {
+                    selProp = thisLayer.selectedProperties[p];
+                    if (selProp.selectedKeys === undefined) {
+                        continue;
+                    }
+                    for (k = 0; k < selProp.selectedKeys.length; k = k + 1) {
+                        keyTime = selProp.keyTime(selProp.selectedKeys[k]);
+                        timesArray.push(keyTime);
+                    }
+                }
+            }
+            timesArray.sort(function(a, b) {
+                return a - b;
+            });
+            return timesArray[0];
+        }
+
+        function eC(commandCode) {
+            app.executeCommand(commandCode);
+        }
+        app.beginUndoGroup("Clone Keyframes");
+        // counter();
+        // if (operatingSystemCheck == 1) {
+        //     if (ScriptUI.environment.keyboardState.metaKey === true) {
+        //         alignKeyframes();
+        //         return;
+        //     }
+        // } else {
+        //     if (ScriptUI.environment.keyboardState.ctrlKey === true) {
+        //         alignKeyframes();
+        //         return;
+        //     }
+        // }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        myComp = app.project.activeItem;
+        myLayers = myComp.selectedLayers;
+        curTime = myComp.time;
+        myProps = [];
+        myKeys = [];
+        pasteTimes = [];
+        pasteDistance = myComp.time - firstKey(myLayers);
+        newProps = [];
+        newKeys = [];
+        for (i = 0; i < myLayers.length; i = i + 1) {
+            thisLayer = myLayers[i];
+            if (thisLayer.selectedProperties.length === 0) {
+                continue;
+            }
+            foundFirst = firstKey(thisLayer);
+            if (foundFirst === undefined) {
+                foundFirst = curTime;
+            }
+            pasteTimes.push(foundFirst + pasteDistance);
+            myProps.push(thisLayer.selectedProperties);
+            layerArrayForKeys = [];
+            for (p = 0; p < thisLayer.selectedProperties.length; p = p + 1) {
+                selProp = thisLayer.selectedProperties[p];
+                layerArrayForKeys.push(selProp.selectedKeys);
+            }
+            myKeys.push(layerArrayForKeys);
+        }
+        app.executeCommand(2004);
+        for (m = 0; m < myProps.length; m = m + 1) {
+            thisLayersProps = myProps[m];
+            for (p = 0; p < thisLayersProps.length; p = p + 1) {
+                thisProp = thisLayersProps[p];
+                selKeys = myKeys[m][p];
+                if (selKeys === undefined) {
+                    continue;
+                } else {
+                    for (k = 0; k < selKeys.length; k = k + 1) {
+                        thisProp.setSelectedAtKey(selKeys[k], true);
+                    }
+                }
+            }
+            myComp.time = pasteTimes[m];
+            eC(19);
+            eC(20);
+            for (i = 0; i < myComp.selectedProperties.length; i = i + 1) {
+                prop = myComp.selectedProperties[i];
+                if (prop.numKeys > 0 && prop.selectedKeys.length > 0) {
+                    newProps.push(prop);
+                    newKeys.push(prop.selectedKeys);
+                }
+            }
+            eC(2004);
+        }
+        for (p = 0; p < newProps.length; p = p + 1) {
+            for (k = 0; k < newKeys[p].length; k = k + 1) {
+                newProps[p].setSelectedAtKey(newKeys[p][k], true);
+            }
+        }
+        myComp.time = curTime;
+        noKeys = 0;
+        for (zz = 0; zz < myLayers.length; zz = zz + 1) {
+            myLayers[zz].selected = true;
+            if (myLayers[zz].selectedProperties.length > 0) {
+                noKeys = noKeys + 1;
+            }
+        }
+        if (noKeys === 0) {
+            alert("Please select some keyframes to clone. :)");
+        } else {
+            for (zz = 0; zz < myLayers.length; zz = zz + 1) {
+                myLayers[zz].selected = true;
+            }
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        app.endUndoGroup();
+    }
+
+    function alignKeyframes() {
+        function firstKey(inputLayers) {
+            if (inputLayers.length === undefined) {
+                inputLayers = [inputLayers];
+            }
+            for (y = 0; y < inputLayers.length; y = y + 1) {
+                thisLayer = inputLayers[y];
+                for (p = 0; p < thisLayer.selectedProperties.length; p = p + 1) {
+                    selProp = thisLayer.selectedProperties[p];
+                    if (selProp.selectedKeys === undefined) {
+                        continue;
+                    }
+                    for (k = 0; k < selProp.selectedKeys.length; k = k + 1) {
+
+                    }
+                }
+            }
+        }
+
+        function eC(commandCode) {
+            app.executeCommand(commandCode);
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        myComp = app.project.activeItem;
+        myLayers = myComp.selectedLayers;
+        curTime = myComp.time;
+        myProps = [];
+        myKeys = [];
+        newProps = [];
+        newKeys = [];
+        for (i = 0; i < myLayers.length; i = i + 1) {
+            thisLayer = myLayers[i];
+            if (thisLayer.selectedProperties.length === 0) {
+                continue;
+            }
+            foundFirst = firstKey(thisLayer);
+            myProps.push(thisLayer.selectedProperties);
+            layerArrayForKeys = [];
+            for (p = 0; p < thisLayer.selectedProperties.length; p = p + 1) {
+                selProp = thisLayer.selectedProperties[p];
+                layerArrayForKeys.push(selProp.selectedKeys);
+            }
+            myKeys.push(layerArrayForKeys);
+        }
+        app.executeCommand(2004);
+        for (m = 0; m < myProps.length; m = m + 1) {
+            thisLayersProps = myProps[m];
+            for (p = 0; p < thisLayersProps.length; p = p + 1) {
+                thisProp = thisLayersProps[p];
+                selKeys = myKeys[m][p];
+                if (selKeys === undefined) {
+                    continue;
+                } else {
+                    for (k = 0; k < selKeys.length; k = k + 1) {
+                        thisProp.setSelectedAtKey(selKeys[k], true);
+                    }
+                }
+                eC(19);
+                eC(18);
+                eC(20);
+                eC(2004);
+            }
+            for (i = 0; i < myComp.selectedProperties.length; i = i + 1) {
+                prop = myComp.selectedProperties[i];
+                if (prop.numKeys > 0 && prop.selectedKeys.length > 0) {
+                    newProps.push(prop);
+                    newKeys.push(prop.selectedKeys);
+                }
+            }
+            eC(2004);
+        }
+        for (p = 0; p < newProps.length; p = p + 1) {
+            for (k = 0; k < newKeys[p].length; k = k + 1) {
+                newProps[p].setSelectedAtKey(newKeys[p][k], true);
+            }
+        }
+        for (m = 0; m < myProps.length; m = m + 1) {
+            thisLayersProps = myProps[m];
+            for (p = 0; p < thisLayersProps.length; p = p + 1) {
+                thisProp = thisLayersProps[p];
+                selKeys = myKeys[m][p];
+                if (selKeys === undefined) {
+                    continue;
+                } else {
+                    for (k = 0; k < selKeys.length; k = k + 1) {
+                        thisProp.setSelectedAtKey(selKeys[k], true);
+                    }
+                }
+            }
+        }
+        for (zz = 0; zz < myLayers.length; zz = zz + 1) {
+            myLayers[zz].selected = true;
+        }
+        noKeys = 0;
+        for (zz = 0; zz < myLayers.length; zz = zz + 1) {
+            if (myLayers[zz].selectedProperties.length > 0) {
+                noKeys = noKeys + 1;
+            }
+        }
+        if (noKeys === 0) {
+            alert("Please select some keyframes to align. :)");
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+    }
+
     //============ 脚本管理器 ==========//
     function rd_ScriptLauncher_doSelectFolder() {
         var folder = Folder.selectDialog("选择AE脚本文件夹");
@@ -1271,12 +1520,10 @@ function urlFilter(readState_body,keyword){
             rd_ScriptLauncher_buildScriptsList(scriptManagerObj);
         }
     }
-
     function rd_ScriptLauncher_doRefreshList() {
         log(app.settings.getSetting("redefinery", "rd_ScriptLauncher_scriptPath"))
         rd_ScriptLauncher_buildScriptsList(scriptManagerObj);
     }
-
     function rd_ScriptLauncher_doRun() {
         var scriptSelected = scriptManagerObj.tlistBox.selection != null;
         if (scriptSelected) {
@@ -1289,7 +1536,6 @@ function urlFilter(readState_body,keyword){
             }
         }
     }
-
     function rd_ScriptLauncher_sortByName(a, b) {
         if (a.name.toLowerCase() < b.name.toLowerCase()) {
             return -1;
@@ -1299,7 +1545,6 @@ function urlFilter(readState_body,keyword){
             return 0;
         }
     }
-
     function rd_ScriptLauncher_getAEScripts(path) {
         var pathFiles = path.getFiles();
         var files = new Array();
@@ -1322,7 +1567,6 @@ function urlFilter(readState_body,keyword){
         }
         return files;
     }
-
     function rd_ScriptLauncher_buildScriptsList(scriptManagerObj) {
         scriptManagerObj.tlistBox.removeAll();
         rd_ScriptLauncherData.scriptFiles = rd_ScriptLauncher_getAEScripts(rd_ScriptLauncherData.scriptPath);
@@ -1336,7 +1580,6 @@ function urlFilter(readState_body,keyword){
             }
         }
     }
-
     var gotScriptPath = false;
     function scriptManagerInit(){
         if (app.settings.haveSetting("redefinery", "rd_ScriptLauncher_scriptPath")) {
