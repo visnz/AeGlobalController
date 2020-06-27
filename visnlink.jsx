@@ -1,17 +1,17 @@
 
 
-UI(this);
 var dictionary;
 var dictionarykeys;
 var dicInit=false;
 var debugMode=true; // 纠错模式，打开时会出现运行时提示
 var logObj;
 var colorPanels=[]
+UI(this,colorPanels);
 var rd_ScriptLauncherData = new Object();
 rd_ScriptLauncherData.scriptPath = "";
 rd_ScriptLauncherData.scriptFiles = new Array();
 var scriptManagerObj;
-function UI(object){
+function UI(object,colorPanel){
     var myPalette = (object instanceof Panel)?object : new Window("palette","桶子工具箱", undefined, {resizeable: true})
     var content=""+
     "group {orientation:'column', alignment:['fill','fill'], spacing:5, "+
@@ -26,7 +26,14 @@ function UI(object){
                     "},"+
                 "},"+
                 "lineB: Panel {text:'集成脚本', alignment:['fill','top'], orientation:'column', spacing:0 ,"+
-                    "multi1: Button { text:'multi1', preferredSize:[100,25] }, "+
+                    "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:0 ,"+
+                        "Fi: Button { text:'Fi', preferredSize:[25,25] }, "+
+                        "Fo: Button { text:'Fo', preferredSize:[25,25] }, "+
+                        "Su: Button { text:'Su', preferredSize:[25,25] }, "+
+                        "Sd: Button { text:'Sd', preferredSize:[25,25] }, "+
+                        "Rl: Button { text:'Rl', preferredSize:[25,25] }, "+
+                        "Rr: Button { text:'Rr', preferredSize:[25,25] }, "+
+                    "},"+   
                 "},"+
             "},"+
         "},"+
@@ -94,8 +101,12 @@ function UI(object){
     scriptManagerObj.tfooter.trefresh.onClick = rd_ScriptLauncher_doRefreshList;
     scriptManagerObj.tlistBox.onDoubleClick = rd_ScriptLauncher_doRun;
     scriptManagerObj.tlistBox.preferredSize.height = 150;
-    myPalette.grp.outsideGroup.line1.lineB.multi1.onClick=function(){
-    }
+    myPalette.grp.outsideGroup.line1.lineB.line1.Fi.onClick=OF_Keyfast_fadeIn
+    myPalette.grp.outsideGroup.line1.lineB.line1.Fo.onClick=OF_Keyfast_fadeOut
+    myPalette.grp.outsideGroup.line1.lineB.line1.Su.onClick=OF_Keyfast_scaleUp
+    myPalette.grp.outsideGroup.line1.lineB.line1.Sd.onClick=OF_Keyfast_scaleDown
+    myPalette.grp.outsideGroup.line1.lineB.line1.Rl.onClick=OF_Keyfast_rotateLeft
+    myPalette.grp.outsideGroup.line1.lineB.line1.Rr.onClick=OF_Keyfast_rotateRight
 
     // rd_ScriptLauncher(myPalette.grp.outsideGroup.line1.scriptManager);
     // random面板
@@ -134,17 +145,16 @@ function UI(object){
         var r = ((res >> 16) & 255)/255;
         var g = ((res >> 8) & 255)/255;
         var b = (parseInt(res,10) & 255)/255;
-        pushColortoPanel(colorPanelslink,[r,g,b])
+        pushColortoPanel(colorPanel,[r,g,b])
         log("new color pushed: "+res)
 
         // saveObjTo(colorQueue,"C:/temp/Aescript_visnlink_tempdata.json")
     }
 
     for(var i=0;i<15;i++){
-        colorPanels[i] = myPalette.grp.colorGroup.line1.add("panel", [0,0,25,25], i);
+        colorPanel[i] = myPalette.grp.colorGroup.line1.add("panel", [0,0,25,25]);
     }
-    var colorPanelslink=colorPanels
-    drawColortoPanel(colorPanelslink)
+    drawColortoPanel(colorPanel)
 
 
     // web界面
@@ -763,165 +773,619 @@ function urlFilter(readState_body,keyword){
 //         }
 //     }
 // }
-function objInside(obj){
-    var seen = []
-    var keys = []
-    JSON.stringify(obj, function(key, val) {
-       if (val != null && typeof val == "object") {
-            if (seen.indexOf(val) >= 0) {
-                return;
+//============ outfun ==========//
+    //============ KeyFast ==========//
+    var slideAmountX,slideAmountY;
+    var slideAmount = 500;
+    var rotateBonus = 180;
+    var myTimeBonusAmount=1
+    var overshootCheckBoxAmount=0
+    easeIn = new KeyframeEase(0, 10);
+    easeOut = new KeyframeEase(0, 90);
+    function OF_Keyfast_move(direct){
+        myComp = app.project.activeItem;
+        myTime = myComp.time;
+        myLayer = myComp.selectedLayers;
+        moveDirection = 5;
+        fullSlide = false;
+        if (myLayer.length < 1) {
+            alert("Please select 1 or more layers");
+        }
+        slideAmountX = slideAmount;
+        slideAmountY = slideAmount;
+        if (direct == 3 || direct == 2) {
+            slideAmountY = 0;
+        }else{
+            slideAmountX = 0;
+        }
+        if (direct == 3) {
+            moveDirection = 1;
+        }
+        if (direct == 2) {
+            moveDirection = -1;
+        }
+        if (direct == 1) {
+            moveDirection = 2;
+        }
+        if (direct == 0) {
+            moveDirection = 3;
+        }
+        app.beginUndoGroup("Move");
+        log("OF_Keyfast_move, direct="+direct+" moveDirection="+moveDirection)
+        log("OF_Keyfast_move, myLayer.length "+myLayer.length)
+        for (i = 0; i < myLayer.length; i = i + 1) {
+            if (direct == 3 || direct == 2) {
+                slideDirection(i, myTime, slideAmountX, slideAmountY, 0, myLayer, moveDirection);
+                log("OF_Keyfast_move: slideDirection")
+                
+            }else{
+                slideDirection(i, myTime, slideAmountX, slideAmountY, 0, myLayer, moveDirection);
+                log("OF_Keyfast_move: slideDirection")
             }
-            seen.push(val);
-            keys.push(key)
-        }
-        return val;
-    });
-    var content=""
-    for(var i=0;i<seen.length;i++){
-        content+=keys[i]+"  :  "
-        //alert(seen[i])
-        //alert((typeof seen[i] == "object"))
-        content+=seen[i].toString()+"\n"
-    }
-    return content
-}
-function objInsideSimple(obj){
-    var seen = []
-    JSON.stringify(obj, function(key, val) {
-       if (val != null && typeof val == "object") {
-            if (seen.indexOf(val) >= 0) {
-                return;
+            log("OF_Keyfast_move"+myLayer[i]+","+myTime+","+slideAmountY+","+slideAmountX+","+moveDirection)
+            easePlacedKeyframes(myLayer[i], myTime, slideAmountY, slideAmountX, moveDirection);
+            if (myLayer[i].property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == false) {
+                myFirstKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Position").nearestKeyIndex(myTime);
+                mySecondKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Position").nearestKeyIndex(myTime + myTimeBonusAmount);
+                myOvershootKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Position").nearestKeyIndex(Number(myTime + myTimeBonusAmount));
+                log("OF_Keyfast_move: linearKeys")
+                linearKeys(myLayer, i, myFirstKeyframe, mySecondKeyframe, myOvershootKeyframe, fullSlide);
+                log("OF_Keyfast_move: linearKeys done")
             }
-            seen.push(val);
         }
-        return val;
-    });
-    return seen
-}
-function rd_ScriptLauncher_doSelectFolder() {
-    var folder = Folder.selectDialog("选择AE脚本文件夹");
-    if (folder != null) {
-        rd_ScriptLauncherData.scriptPath = folder;
-        log(folder.fsName)
-        app.settings.saveSetting("redefinery", "rd_ScriptLauncher_scriptPath", folder.fsName);
-        rd_ScriptLauncher_buildScriptsList(scriptManagerObj);
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        app.endUndoGroup();
     }
-}
-
-function rd_ScriptLauncher_doRefreshList() {
-    log(app.settings.getSetting("redefinery", "rd_ScriptLauncher_scriptPath"))
-    rd_ScriptLauncher_buildScriptsList(scriptManagerObj);
-}
-
-function rd_ScriptLauncher_doRun() {
-    var scriptSelected = scriptManagerObj.tlistBox.selection != null;
-    if (scriptSelected) {
-        var scriptIndex = scriptManagerObj.tlistBox.selection.index;
-        var scriptFile = new File(rd_ScriptLauncherData.scriptFiles[scriptIndex].absoluteURI);
-        if (scriptFile.exists) {
-            $.evalFile(scriptFile)
-        } else {
-            alert("无法找到选定的脚本.", "脚本管理器")
+    function linearKeys(passedLayer, passedNumber, keyOne, keyTwo, overshootKey) {
+        try {
+            passedLayer[passedNumber].property("ADBE Transform Group").property("ADBE Position").setSpatialTangentsAtKey(keyOne, [0, 0, 0], [0, 0, 0]);
+            passedLayer[passedNumber].property("ADBE Transform Group").property("ADBE Position").setSpatialTangentsAtKey(keyTwo, [0, 0, 0], [0, 0, 0]);
+        } catch (err) {
+            alert(err.toString());
         }
     }
-}
-
-function rd_ScriptLauncher_sortByName(a, b) {
-    if (a.name.toLowerCase() < b.name.toLowerCase()) {
-        return -1;
-    } else if (a.name.toLowerCase() > b.name.toLowerCase()) {
-        return 1;
-    } else {
-        return 0;
+    function easePlacedKeyframes(layer, time, slideY, slideX, direction) {
+        log("easePlacedKeyframes() 1r")
+        if (layer.property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == false) {
+            log("easePlacedKeyframes() 1a")
+            myFirstKeyframe = layer.property("ADBE Transform Group").property("ADBE Position").nearestKeyIndex(time);
+            mySecondKeyframe = layer.property("ADBE Transform Group").property("ADBE Position").nearestKeyIndex(time + myTimeBonusAmount);
+            layer.property("ADBE Transform Group").property("ADBE Position").setTemporalEaseAtKey(myFirstKeyframe, [easeIn], [easeOut]);
+            layer.property("ADBE Transform Group").property("ADBE Position").setTemporalEaseAtKey(mySecondKeyframe, [easeIn], [easeOut]);
+            log("easePlacedKeyframes() 1b")
+        }
+        log("easePlacedKeyframes() 1d 2r")
+        if (slideY !== 0) {
+            log("easePlacedKeyframes() 2a")
+            if (layer.property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == true) {
+                myFirstKeyframe = layer.property("ADBE Transform Group").property("ADBE Position_1").nearestKeyIndex(time);
+                mySecondKeyframe = layer.property("ADBE Transform Group").property("ADBE Position_1").nearestKeyIndex(time + myTimeBonusAmount);
+                layer.property("ADBE Transform Group").property("ADBE Position_1").setTemporalEaseAtKey(myFirstKeyframe, [easeIn], [easeOut]);
+                layer.property("ADBE Transform Group").property("ADBE Position_1").setTemporalEaseAtKey(mySecondKeyframe, [easeIn], [easeOut]);
+            }
+            log("easePlacedKeyframes() 2b")
+        }
+        log("easePlacedKeyframes() 2d 3r")
+        if (direction == -1 || direction == 1) {
+            log("easePlacedKeyframes() 3a")
+            if (layer.property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == true) {
+                myFirstKeyframe = layer.property("ADBE Transform Group").property("ADBE Position_0").nearestKeyIndex(time);
+                mySecondKeyframe = layer.property("ADBE Transform Group").property("ADBE Position_0").nearestKeyIndex(time + myTimeBonusAmount);
+                layer.property("ADBE Transform Group").property("ADBE Position_0").setTemporalEaseAtKey(myFirstKeyframe, [easeIn], [easeOut]);
+                layer.property("ADBE Transform Group").property("ADBE Position_0").setTemporalEaseAtKey(mySecondKeyframe, [easeIn], [easeOut]);
+            }
+            log("easePlacedKeyframes() 3b")
+        }
+        log("easePlacedKeyframes() done")
     }
-}
-
-function rd_ScriptLauncher_getAEScripts(path) {
-    var pathFiles = path.getFiles();
-    var files = new Array();
-    pathFiles.sort(rd_ScriptLauncher_sortByName);
-    for (var i = 0; i < pathFiles.length; i += 1) {
-        if (pathFiles[i] instanceof Folder) {
-            if (pathFiles[i].name.match(/^\(.*\)$/)) {
-                continue;
-            } else {
-                subfiles = rd_ScriptLauncher_getAEScripts(pathFiles[i]);
-                for (var j = 0; j < subfiles.length; j += 1) {
-                    files[files.length] = subfiles[j]
+    function findOvershoot(layer, theTime, direction, fullSlideValue, layerNumKeys, commandCheck) {
+        log("findOvershoot")
+        myComp = app.project.activeItem;
+        if (layer.property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == false) {
+            firstLayerXPosition = layer.property("ADBE Transform Group").property("ADBE Position").value[0];
+            firstLayerYPosition = layer.property("ADBE Transform Group").property("ADBE Position").value[1];
+            layerPositions = layer.property("ADBE Transform Group").property("ADBE Position").valueAtTime(Number(theTime) + Number(myTimeBonusAmount), false);
+            layerXPosition = layerPositions[0];
+            layerYPosition = layerPositions[1];
+            differenceX = layerXPosition - firstLayerXPosition;
+            differenceY = layerYPosition - firstLayerYPosition;
+            overshootXPosition = differenceX * (overshootAmount / 100);
+            overshootYPosition = differenceY * (overshootAmount / 100);
+            overshootTime = (myTimeBonusAmount / 3) * 2;
+            if (fullSlideValue == false && direction == 1 || direction == -1) {
+                layer.property("ADBE Transform Group").property("ADBE Position").setValueAtTime(theTime + overshootTime, [layerXPosition, layerYPosition] + [overshootXPosition, 0]);
+            }
+            if (fullSlideValue == false && direction == 2 || direction == 3) {
+                layer.property("ADBE Transform Group").property("ADBE Position").setValueAtTime(theTime + overshootTime, [layerXPosition, layerYPosition] + [0, overshootYPosition]);
+            }
+            if (fullSlideValue == true && direction == 1 || direction == -1) {
+                if (layerNumKeys === 0 && commandCheck == 0) {
+                    layer.property("ADBE Transform Group").property("ADBE Position").setValueAtTime(theTime + overshootTime, [layerXPosition, layerYPosition] + [overshootXPosition, 0]);
+                } else {
+                    layer.property("ADBE Transform Group").property("ADBE Position").setValueAtTime(theTime + overshootTime, [firstLayerXPosition, firstLayerYPosition] - [overshootXPosition, 0]);
                 }
             }
-        } else {
-            if (pathFiles[i].name.match(/\.(js|jsx|jsxbin)$/) && pathFiles[i].fsName != File($.fileName).fsName) {
-                files[files.length] = pathFiles[i]
+            if (fullSlideValue == true && direction == 2 || direction == 3) {
+                if (layerNumKeys === 0 && commandCheck == 0) {
+                    layer.property("ADBE Transform Group").property("ADBE Position").setValueAtTime(theTime + overshootTime, [layerXPosition, layerYPosition] + [0, overshootYPosition]);
+                } else {
+                    layer.property("ADBE Transform Group").property("ADBE Position").setValueAtTime(theTime + overshootTime, [firstLayerXPosition, firstLayerYPosition] - [0, overshootYPosition]);
+                }
+            }
+            myOvershootKeyframe = layer.property("ADBE Transform Group").property("ADBE Position").nearestKeyIndex(Number(theTime + overshootTime));
+            layer.property("ADBE Transform Group").property("ADBE Position").setTemporalEaseAtKey(myOvershootKeyframe, [easeIn], [easeOut]);
+        }
+        if (layer.property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == true) {
+            firstLayerXPosition = layer.property("ADBE Transform Group").property("ADBE Position_0").value;
+            firstLayerYPosition = layer.property("ADBE Transform Group").property("ADBE Position_1").value;
+            layerPositions = layer.property("ADBE Transform Group").property("ADBE Position").valueAtTime(Number(theTime) + Number(myTimeBonusAmount), false);
+            layerXPosition = layerPositions[0];
+            layerYPosition = layerPositions[1];
+            differenceX = layerXPosition - firstLayerXPosition;
+            differenceY = layerYPosition - firstLayerYPosition;
+            overshootXPosition = differenceX * (overshootAmount / 100);
+            overshootYPosition = differenceY * (overshootAmount / 100);
+            overshootTime = (myTimeBonusAmount / 3) * 2;
+            if (fullSlideValue == false && direction == 1 || direction == -1) {
+                layer.property("ADBE Transform Group").property("ADBE Position_0").setValueAtTime(theTime + overshootTime, layerXPosition + overshootXPosition);
+            }
+            if (fullSlideValue == false && direction == 2 || direction == 3) {
+                layer.property("ADBE Transform Group").property("ADBE Position_1").setValueAtTime(theTime + overshootTime, layerYPosition + overshootYPosition);
+            }
+            if (fullSlideValue == true && Number(direction) == 1 || Number(direction) == -1) {
+                if (layerNumKeys === 0 && commandCheck == 0) {
+                    layer.property("ADBE Transform Group").property("ADBE Position_0").setValueAtTime(theTime + overshootTime, layerXPosition + overshootXPosition);
+                } else {
+                    layer.property("ADBE Transform Group").property("ADBE Position_0").setValueAtTime(theTime + overshootTime, firstLayerXPosition - overshootXPosition);
+                }
+                myOvershootKeyframe = layer.property("ADBE Transform Group").property("ADBE Position_0").nearestKeyIndex(Number(theTime + overshootTime));
+                layer.property("ADBE Transform Group").property("ADBE Position_0").setTemporalEaseAtKey(myOvershootKeyframe, [easeIn], [easeOut]);
+            }
+            if (fullSlideValue == true && Number(direction) == 2 || Number(direction) == 3) {
+                if (layerNumKeys === 0 && commandCheck == 0) {
+                    layer.property("ADBE Transform Group").property("ADBE Position_1").setValueAtTime(theTime + overshootTime, layerYPosition + overshootYPosition);
+                } else {
+                    layer.property("ADBE Transform Group").property("ADBE Position_1").setValueAtTime(theTime + overshootTime, firstLayerYPosition - overshootYPosition);
+                }
+            }
+            if (direction == 1 || direction == -1) {
+                myOvershootKeyframe = layer.property("ADBE Transform Group").property("ADBE Position_0").nearestKeyIndex(Number(theTime + overshootTime));
+                layer.property("ADBE Transform Group").property("ADBE Position_0").setTemporalEaseAtKey(myOvershootKeyframe, [easeIn], [easeOut]);
+            } else {
+                myOvershootKeyframe = layer.property("ADBE Transform Group").property("ADBE Position_1").nearestKeyIndex(Number(theTime + overshootTime));
+                layer.property("ADBE Transform Group").property("ADBE Position_1").setTemporalEaseAtKey(myOvershootKeyframe, [easeIn], [easeOut]);
             }
         }
     }
-    return files;
-}
-
-function rd_ScriptLauncher_buildScriptsList(scriptManagerObj) {
-    scriptManagerObj.tlistBox.removeAll();
-    rd_ScriptLauncherData.scriptFiles = rd_ScriptLauncher_getAEScripts(rd_ScriptLauncherData.scriptPath);
-    for (var i = 0; i < rd_ScriptLauncherData.scriptFiles.length; i += 1) {
-        fullName = rd_ScriptLauncherData.scriptFiles[i].fsName;
-        iconFile = File(fullName.replace(/.(js|jsx|jsxbin)$/, ".png"));
-        fullName = fullName.substr(rd_ScriptLauncherData.scriptPath.fsName.length + 1);
-        item =scriptManagerObj.tlistBox.add("item", fullName);
-        if (iconFile.exists) {
-            item.icon = iconFile
+    function slideDirection(num, time, slideX, slideY, command, layer, direction) {
+        log("slideDirection num="+num)
+        log("slideDirection time="+time)
+        log("slideDirection slideX="+slideX)
+        log("slideDirection slideY="+slideY)
+        log("slideDirection command="+command)
+        // log("slideDirection layer="+layer)
+        log("slideDirection direction="+direction)
+        var posValue;
+        if (layer[num].property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == false && direction == 1 || direction == -1) {
+            posValue = layer[num].property("ADBE Transform Group").property("ADBE Position").value;
+            position = layer[num].property("ADBE Transform Group").property("ADBE Position");
+            if (position.numKeys >= 1 || command == 1) {
+                position.setValueAtTime(time, posValue);
+                position.setValueAtTime(time + myTimeBonusAmount, posValue + [slideX * direction, slideY]);
+            } else {
+                position.setValueAtTime(time, posValue + [-slideX * direction, slideY]);
+                position.setValueAtTime(time + myTimeBonusAmount, posValue);
+            }
         }
-    }
-}
+        log("slideDirection 1r")
+        if (layer[num].property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == true && direction == 1 || direction == -1) {
+            log("slideDirection 1a")
+            positionValueX = layer[num].property("ADBE Transform Group").property("ADBE Position_0").value;
+            positionX = layer[num].property("ADBE Transform Group").property("ADBE Position_0");
+            if (positionX.numKeys >= 1 || command == 1) {
+                positionX.setValueAtTime(time, positionValueX);
+                positionX.setValueAtTime(time + myTimeBonusAmount, positionValueX + (slideX * direction));
+            } else {
+                positionX.setValueAtTime(time + myTimeBonusAmount, positionValueX);
+                positionX.setValueAtTime(time, positionValueX + (-slideX * direction));
+            }
+            log("slideDirection 1b")
+        }
+        log("slideDirection 1d 2r")
+        if (direction == 2) {
+            directionMultiple = 1;
+        }
+        if (direction == 3) {
+            directionMultiple = -1;
+        }
+        log("slideDirection 2d 3r")
+        if (layer[num].property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == false && direction == 2 || direction == 3) {
+            // log("slideDirection 3a layer.length ="+layer.length+" ")
+            // log("slideDirection 3a layer[0].name ="+layer[0].name)
+            // log("slideDirection 3a layer[num].property(1) ="+objInside(layer[num].property("ADBE Transform Group")))
+            // log("slideDirection 3a layer[num].property(2) ="+objInside(layer[num].property("ADBE Transform Group").property("ADBE Position").value))
+            // log("slideDirection 3a  posValue:"+layer[num].property("ADBE Transform Group").property("ADBE Position").value)
+            // log("slideDirection 3a  posValue length:"+layer[num].property("ADBE Transform Group").property("ADBE Position").value.length)
+            // log("slideDirection 3a  posValue[0]:"+layer[num].property("ADBE Transform Group").property("ADBE Position").value[0])
+            // log("slideDirection 3a  posValue[1]:"+layer[num].property("ADBE Transform Group").property("ADBE Position").value[1])
+            // log("slideDirection 3a  posValue[2]:"+layer[num].property("ADBE Transform Group").property("ADBE Position").value[2])
+            // var tmp=[layer[num].property("ADBE Transform Group").property("ADBE Position").value[0],layer[num].property("ADBE Transform Group").property("ADBE Position").value[1],layer[num].property("ADBE Transform Group").property("ADBE Position").value[2]]
+            // log("slideDirection 3a layer[num].property(2) ="+objInside(layer[num].property("ADBE Transform Group").property("ADBE Position").value))
+            // var tmp=objInside(layer[num].property("ADBE Transform Group").property("ADBE Position").value)
+            // log("tmp="+tmp+"=  tmp.length="+tmp.length)
+            // tmp=tmp.split(",")
+            // log("tmp="+tmp+"=  tmp.length="+tmp.length)
+            try{
+            posValue = layer[num].property("ADBE Transform Group").property("ADBE Position").value;
+            position = layer[num].property("ADBE Transform Group").property("ADBE Position");
+            log("slideDirection 3a : posValue="+posValue+" position="+position)
+            if (position.numKeys >= 1 || command == 1) {
+                position.setValueAtTime(time, posValue);
+                position.setValueAtTime(time + myTimeBonusAmount, posValue + [slideX, slideY * directionMultiple]);
+            } else {
+                position.setValueAtTime(time, posValue + [slideX, -slideY * directionMultiple]);
+                position.setValueAtTime(time + myTimeBonusAmount, posValue);
+            }
+            }catch(e){log(e)}
+            log("slideDirection 3b")
+        }
+        log("slideDirection 3d 4r")
 
-var gotScriptPath = false;
-function scriptManagerInit(){
-    if (app.settings.haveSetting("redefinery", "rd_ScriptLauncher_scriptPath")) {
-        rd_ScriptLauncherData.scriptPath = new Folder(app.settings.getSetting("redefinery", "rd_ScriptLauncher_scriptPath"));
-        gotScriptPath = true;
-    } else {
-        var folder = Folder.selectDialog("选择AE脚本文件夹位置.");
+        if (layer[num].property("ADBE Transform Group").property("ADBE Position").dimensionsSeparated == true && direction == 2 || direction == 3) {
+            log("slideDirection 4a")
+            positionValueY = layer[num].property("ADBE Transform Group").property("ADBE Position_1").value;
+            positionY = layer[num].property("ADBE Transform Group").property("ADBE Position_1");
+            if (positionY.numKeys >= 1 || command == 1) {
+                log("slideDirection 41a")
+                positionY.setValueAtTime(time, positionValueY);
+                positionY.setValueAtTime(time + myTimeBonusAmount, positionValueY + (slideY * directionMultiple));
+                log("slideDirection 41b")
+            } else {
+                log("slideDirection 42a")
+                positionY.setValueAtTime(time + myTimeBonusAmount, positionValueY);
+                positionY.setValueAtTime(time, positionValueY + (-slideY * directionMultiple));
+                log("slideDirection 42b")
+            }
+            log("slideDirection 4b")
+        }
+        log("slideDirection done")
+        
+    }
+    function OF_Keyfast_fadeIn() {
+        myComp = app.project.activeItem;
+        myTime = myComp.time;
+        myLayer = myComp.selectedLayers;
+        if (myLayer.length < 1) {
+            alert("Please select 1 or more layers");
+        }
+        app.beginUndoGroup("Fade in");
+        for (i = 0; i < myLayer.length; i = i + 1) {
+            if (myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").value === 0) {
+                myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setValueAtTime(myTime, 100);
+            }
+            myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setValueAtTime(myTime + myTimeBonusAmount, [myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").value]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setValueAtTime(myTime, 0);
+            myFirstKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").nearestKeyIndex(myTime);
+            mySecondKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").nearestKeyIndex(myTime + myTimeBonusAmount);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setTemporalEaseAtKey(myFirstKeyframe, [easeIn], [easeOut]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setTemporalEaseAtKey(mySecondKeyframe, [easeIn], [easeOut]);
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        app.endUndoGroup();
+    }
+    function OF_Keyfast_fadeOut() {
+        myComp = app.project.activeItem;
+        myTime = myComp.time;
+        myLayer = myComp.selectedLayers;
+        if (myLayer.length < 1) {
+            alert("Please select 1 or more layers");
+        }
+        app.beginUndoGroup("Fade out");
+        for (i = 0; i < myLayer.length; i = i + 1) {
+            myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setValueAtTime(myTime, [myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").value]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setValueAtTime(myTime + myTimeBonusAmount, 0);
+            myFirstKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").nearestKeyIndex(myTime);
+            mySecondKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").nearestKeyIndex(myTime + myTimeBonusAmount);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setTemporalEaseAtKey(myFirstKeyframe, [easeIn], [easeOut]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Opacity").setTemporalEaseAtKey(mySecondKeyframe, [easeIn], [easeOut]);
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        app.endUndoGroup();
+    }
+    function OF_Keyfast_scaleUp() {
+        myComp = app.project.activeItem;
+        myTime = myComp.time;
+        myLayer = myComp.selectedLayers;
+        if (myLayer.length < 1) {
+            alert("Please select 1 or more layers");
+        }
+        app.beginUndoGroup("Scale");
+        // log("OF_Keyfast_scaleUp(): myLayer.length: "+myLayer.length)
+        for (i = 0; i < myLayer.length; i = i + 1) {
+            // log("OF_Keyfast_scaleUp(): for")
+            currentObjectWidth = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").value[0];
+            currentObjectHeight = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").value[1];
+            // log("OF_Keyfast_scaleUp(): for if 1r")
+            if (currentObjectHeight > 0 || currentObjectWidth > 0 || currentObjectHeight < 0 || currentObjectWidth < 0) {
+                log("OF_Keyfast_scaleUp(): for if 1a")
+                myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setValueAtTime(myTime, [0, 0]);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setValueAtTime(myTime + myTimeBonusAmount, [currentObjectWidth, currentObjectHeight]);
+                log("OF_Keyfast_scaleUp(): for if 1b")
+            }
+            // log("OF_Keyfast_scaleUp(): for if 2r")
+            if (currentObjectHeight === 0 || currentObjectWidth === 0) {
+                log("OF_Keyfast_scaleUp(): for if 2a")
+                myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setValueAtTime(myTime, [0, 0]);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setValueAtTime(myTime + myTimeBonusAmount, [100, 100]);
+                log("OF_Keyfast_scaleUp(): for if 2b")
+            }
+            // log("OF_Keyfast_scaleUp(): for if 3r")
+            if (overshootCheckBoxAmount == 1) {
+                // log("OF_Keyfast_scaleUp(): for if 3a")
+                myComp.time = myTime + myTimeBonusAmount;
+                currentObjectWidth = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").value[0];
+                currentObjectHeight = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").value[1];
+                fullSize = [currentObjectWidth, currentObjectHeight];
+                overshootSize = fullSize + (fullSize * (overshootAmount / 100));
+                myComp.time = myTime;
+                overshootTime = (myTimeBonusAmount / 3) * 2;
+                myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setValueAtTime(myTime + overshootTime, overshootSize);
+                myBonusKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").nearestKeyIndex(myTime + overshootTime);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setTemporalEaseAtKey(myBonusKeyframe, [easeIn, easeIn, easeIn], [easeOut, easeOut, easeOut]);
+                // log("OF_Keyfast_scaleUp(): for if 3b")
+            }
+            // log("OF_Keyfast_scaleUp(): for if 3d")
+            myFirstKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").nearestKeyIndex(myTime);
+            mySecondKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").nearestKeyIndex(myTime + myTimeBonusAmount);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setTemporalEaseAtKey(myFirstKeyframe, [easeIn, easeIn, easeIn], [easeOut, easeOut, easeOut]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setTemporalEaseAtKey(mySecondKeyframe, [easeIn, easeIn, easeIn], [easeOut, easeOut, easeOut]);
+            // log("OF_Keyfast_scaleUp(): for")
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        app.endUndoGroup();
+    }
+    function OF_Keyfast_scaleDown() {
+        myComp = app.project.activeItem;
+        myTime = myComp.time;
+        myLayer = myComp.selectedLayers;
+        app.beginUndoGroup("Scale down");
+        if (myLayer.length < 1) {
+            alert("Please select 1 or more layers");
+        }
+        for (i = 0; i < myLayer.length; i = i + 1) {
+            myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setValueAtTime(myTime, [myLayer[i].property("ADBE Transform Group").property("ADBE Scale").value[0], myLayer[i].property("ADBE Transform Group").property("ADBE Scale").value[1]]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setValueAtTime(myTime + myTimeBonusAmount, [0, 0]);
+            if (overshootCheckBoxAmount == "true") {
+                currentObjectWidth = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").value[0];
+                currentObjectHeight = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").value[1];
+                fullSize = [currentObjectWidth, currentObjectHeight];
+                overshootSize = fullSize + (fullSize * (overshootAmount / 100));
+                overshootTime = (myTimeBonusAmount / 3) * 2;
+                myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setValueAtTime(myTime + overshootTime, overshootSize);
+                myBonusKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").nearestKeyIndex(myTime + overshootTime);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setTemporalEaseAtKey(myBonusKeyframe, [easeIn, easeIn, easeIn], [easeOut, easeOut, easeOut]);
+            }
+            myFirstKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").nearestKeyIndex(myTime);
+            mySecondKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Scale").nearestKeyIndex(myTime + myTimeBonusAmount);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setTemporalEaseAtKey(myFirstKeyframe, [easeIn, easeIn, easeIn], [easeOut, easeOut, easeOut]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Scale").setTemporalEaseAtKey(mySecondKeyframe, [easeIn, easeIn, easeIn], [easeOut, easeOut, easeOut]);
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        app.endUndoGroup();
+    }
+    function OF_Keyfast_rotateLeft() {
+        myComp = app.project.activeItem;
+        myTime = myComp.time;
+        myLayer = myComp.selectedLayers;
+        if (myLayer.length < 1) {
+            alert("Please select 1 or more layers");
+        }
+        app.beginUndoGroup("rotate left");
+        for (i = 0; i < myLayer.length; i = i + 1) {
+            myRotation = Number(myLayer[i].property("ADBE Transform Group").property("Rotation").value);
+            if (myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").numKeys < 1) {
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime, myRotation + rotateBonus);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime + myTimeBonusAmount, myRotation);
+            } else {
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime, myRotation);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime + myTimeBonusAmount, myRotation - rotateBonus);
+            }
+            if (overshootCheckBoxAmount == "true") {
+                startRotation = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").value;
+                myComp.time = myTime + myTimeBonusAmount;
+                endRotation = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").value;
+                rotationDifference = startRotation - endRotation;
+                overshootRotation = endRotation - (rotationDifference * (overshootAmount / 100));
+                myComp.time = myTime;
+                overshootTime = (myTimeBonusAmount / 3) * 2;
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime + overshootTime, overshootRotation);
+                myBonusKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").nearestKeyIndex(myTime + overshootTime);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setTemporalEaseAtKey(myBonusKeyframe, [easeIn], [easeOut]);
+            }
+            myFirstKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").nearestKeyIndex(myTime);
+            mySecondKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").nearestKeyIndex(myTime + myTimeBonusAmount);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setTemporalEaseAtKey(myFirstKeyframe, [easeIn], [easeOut]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setTemporalEaseAtKey(mySecondKeyframe, [easeIn], [easeOut]);
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        app.endUndoGroup();
+    }
+    function OF_Keyfast_rotateRight() {
+        myComp = app.project.activeItem;
+        myTime = myComp.time;
+        myLayer = myComp.selectedLayers;
+        if (myLayer.length < 1) {
+            alert("Please select 1 or more layers");
+        }
+        app.beginUndoGroup("rotate right");
+        for (i = 0; i < myLayer.length; i = i + 1) {
+            myRotation = myLayer[i].property("ADBE Transform Group").property("Rotation").value;
+            if (myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").numKeys < 1) {
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime, myRotation - rotateBonus);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime + myTimeBonusAmount, myRotation);
+            } else {
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime, myRotation);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime + myTimeBonusAmount, myRotation + rotateBonus);
+            }
+            if (overshootCheckBoxAmount == "true") {
+                startRotation = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").value;
+                myComp.time = myTime + myTimeBonusAmount;
+                endRotation = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").value;
+                rotationDifference = endRotation - startRotation;
+                overshootRotation = endRotation + (rotationDifference * (overshootAmount / 100));
+                myComp.time = myTime;
+                overshootTime = (myTimeBonusAmount / 3) * 2;
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setValueAtTime(myTime + overshootTime, overshootRotation);
+                myBonusKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").nearestKeyIndex(myTime + overshootTime);
+                myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setTemporalEaseAtKey(myBonusKeyframe, [easeIn], [easeOut]);
+            }
+            myFirstKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").nearestKeyIndex(myTime);
+            mySecondKeyframe = myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").nearestKeyIndex(myTime + myTimeBonusAmount);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setTemporalEaseAtKey(myFirstKeyframe, [easeIn], [easeOut]);
+            myLayer[i].property("ADBE Transform Group").property("ADBE Rotate Z").setTemporalEaseAtKey(mySecondKeyframe, [easeIn], [easeOut]);
+        }
+        if (app.activeViewer.type == ViewerType.VIEWER_COMPOSITION) {
+            app.activeViewer.setActive();
+        }
+        app.endUndoGroup();
+    }
+    //============ 脚本管理器 ==========//
+    function rd_ScriptLauncher_doSelectFolder() {
+        var folder = Folder.selectDialog("选择AE脚本文件夹");
         if (folder != null) {
             rd_ScriptLauncherData.scriptPath = folder;
-            gotScriptPath = true;
+            log(folder.fsName)
             app.settings.saveSetting("redefinery", "rd_ScriptLauncher_scriptPath", folder.fsName);
+            rd_ScriptLauncher_buildScriptsList(scriptManagerObj);
         }
     }
-    if (gotScriptPath) {
-        rd_ScriptLauncher_buildScriptsList(scriptManagerObj)
-    } else {
-        alert("无法打开文件夹,因为无法找到.", "脚本管理器")
-    }
-}
-scriptManagerInit();
 
-function pushColortoPanel(colorPanels,colorFloatArray){
-    for(var i=14;i>0;i--){
-        eval('app.settings.saveSetting("visnlink", "colorPanelColors'+i+'",app.settings.getSetting("visnlink", "colorPanelColors'+(i-1)+'"))')
+    function rd_ScriptLauncher_doRefreshList() {
+        log(app.settings.getSetting("redefinery", "rd_ScriptLauncher_scriptPath"))
+        rd_ScriptLauncher_buildScriptsList(scriptManagerObj);
     }
-    app.settings.saveSetting("visnlink", "colorPanelColors0",colorFloatArray.toString());
-    drawColortoPanel(colorPanels)
-}
-function getAllColortoPanel(){
-    var arr=[]
-    if(!app.settings.haveSetting("visnlink", "colorPanelColors14")){
-        for(var i=0;i<15;i++){
-            eval('app.settings.saveSetting("visnlink", "colorPanelColors'+i+'",[0.01*'+i+',0.03*'+i+',0.06*'+i+'].toString())')
-            arr.push([0.01*i,0.03*i,0.06*i])
-            
-        }
-    }else{
-        for(var i=0;i<15;i++){
-            eval('arr.push((app.settings.getSetting("visnlink", "colorPanelColors'+i+'")).split(","))')
-            for(var j=0;j<3;j++){
-                arr[i][j]=parseFloat(arr[i][j])
+
+    function rd_ScriptLauncher_doRun() {
+        var scriptSelected = scriptManagerObj.tlistBox.selection != null;
+        if (scriptSelected) {
+            var scriptIndex = scriptManagerObj.tlistBox.selection.index;
+            var scriptFile = new File(rd_ScriptLauncherData.scriptFiles[scriptIndex].absoluteURI);
+            if (scriptFile.exists) {
+                $.evalFile(scriptFile)
+            } else {
+                alert("无法找到选定的脚本.", "脚本管理器")
             }
         }
     }
-    return arr
-}
-function drawColortoPanel(colorPanels){
-    var colorQueue=getAllColortoPanel()
-    for(var i=0;i<15;i++){
-        colorPanels[i].graphics.backgroundColor = colorPanels[i].graphics.newBrush(colorPanels[i].graphics.BrushType.SOLID_COLOR,colorQueue[i]);
+
+    function rd_ScriptLauncher_sortByName(a, b) {
+        if (a.name.toLowerCase() < b.name.toLowerCase()) {
+            return -1;
+        } else if (a.name.toLowerCase() > b.name.toLowerCase()) {
+            return 1;
+        } else {
+            return 0;
+        }
     }
-}
+
+    function rd_ScriptLauncher_getAEScripts(path) {
+        var pathFiles = path.getFiles();
+        var files = new Array();
+        pathFiles.sort(rd_ScriptLauncher_sortByName);
+        for (var i = 0; i < pathFiles.length; i += 1) {
+            if (pathFiles[i] instanceof Folder) {
+                if (pathFiles[i].name.match(/^\(.*\)$/)) {
+                    continue;
+                } else {
+                    subfiles = rd_ScriptLauncher_getAEScripts(pathFiles[i]);
+                    for (var j = 0; j < subfiles.length; j += 1) {
+                        files[files.length] = subfiles[j]
+                    }
+                }
+            } else {
+                if (pathFiles[i].name.match(/\.(js|jsx|jsxbin)$/) && pathFiles[i].fsName != File($.fileName).fsName) {
+                    files[files.length] = pathFiles[i]
+                }
+            }
+        }
+        return files;
+    }
+
+    function rd_ScriptLauncher_buildScriptsList(scriptManagerObj) {
+        scriptManagerObj.tlistBox.removeAll();
+        rd_ScriptLauncherData.scriptFiles = rd_ScriptLauncher_getAEScripts(rd_ScriptLauncherData.scriptPath);
+        for (var i = 0; i < rd_ScriptLauncherData.scriptFiles.length; i += 1) {
+            fullName = rd_ScriptLauncherData.scriptFiles[i].fsName;
+            iconFile = File(fullName.replace(/.(js|jsx|jsxbin)$/, ".png"));
+            fullName = fullName.substr(rd_ScriptLauncherData.scriptPath.fsName.length + 1);
+            item =scriptManagerObj.tlistBox.add("item", fullName);
+            if (iconFile.exists) {
+                item.icon = iconFile
+            }
+        }
+    }
+
+    var gotScriptPath = false;
+    function scriptManagerInit(){
+        if (app.settings.haveSetting("redefinery", "rd_ScriptLauncher_scriptPath")) {
+            rd_ScriptLauncherData.scriptPath = new Folder(app.settings.getSetting("redefinery", "rd_ScriptLauncher_scriptPath"));
+            gotScriptPath = true;
+        } else {
+            var folder = Folder.selectDialog("选择AE脚本文件夹位置.");
+            if (folder != null) {
+                rd_ScriptLauncherData.scriptPath = folder;
+                gotScriptPath = true;
+                app.settings.saveSetting("redefinery", "rd_ScriptLauncher_scriptPath", folder.fsName);
+            }
+        }
+        if (gotScriptPath) {
+            rd_ScriptLauncher_buildScriptsList(scriptManagerObj)
+        } else {
+            alert("无法打开文件夹,因为无法找到.", "脚本管理器")
+        }
+    }
+    scriptManagerInit();
+    //============ 色板 ==========//
+    function pushColortoPanel(colorPanels,colorFloatArray){
+        for(var i=14;i>0;i--){
+            eval('app.settings.saveSetting("visnlink", "colorPanelColors'+i+'",app.settings.getSetting("visnlink", "colorPanelColors'+(i-1)+'"))')
+        }
+        app.settings.saveSetting("visnlink", "colorPanelColors0",colorFloatArray.toString());
+        drawColortoPanel(colorPanels)
+    }
+    function getAllColortoPanel(){
+        var arr=[]
+        if(!app.settings.haveSetting("visnlink", "colorPanelColors14")){
+            for(var i=0;i<15;i++){
+                eval('app.settings.saveSetting("visnlink", "colorPanelColors'+i+'",[0.01*'+i+',0.03*'+i+',0.06*'+i+'].toString())')
+                arr.push([0.01*i,0.03*i,0.06*i])
+                
+            }
+        }else{
+            for(var i=0;i<15;i++){
+                eval('arr.push((app.settings.getSetting("visnlink", "colorPanelColors'+i+'")).split(","))')
+                for(var j=0;j<3;j++){
+                    arr[i][j]=parseFloat(arr[i][j])
+                }
+            }
+        }
+        return arr
+    }
+    function drawColortoPanel(colorPanels){
+        var colorQueue=getAllColortoPanel()
+        for(var i=0;i<15;i++){
+            colorPanels[i].graphics.backgroundColor = colorPanels[i].graphics.newBrush(colorPanels[i].graphics.BrushType.SOLID_COLOR,colorQueue[i]);
+        }
+    }
