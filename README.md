@@ -1,16 +1,16 @@
 # 桶子集成脚本（自家用）
 
-![界面图](./media/panel.png)
+![界面图](https://v.guediao.top/mygithub/AeGlobalController/panel.png)
 
 ## 功能简述
 
 1. 脚本管理器：集成自常见脚本管理器，需要自选script文件夹，右边可刷新
 
-![](./media/panel3.png)
+![](https://v.guediao.top/mygithub/AeGlobalController/panel3.png)
 
 2. 集成脚本
 
-![集成脚本图](./media/panel2.png)
+![集成脚本图](https://v.guediao.top/mygithub/AeGlobalController/panel2.png)
 
 这里基本集成了业界流传的一些实用脚本（目前仅集成我个人用得较多的）。
 这里所谓**集成**，是指**这一系列脚本已经内嵌在这个大的脚本之内**了
@@ -36,24 +36,24 @@
 6. AnchorMove 锚点移动（函数来自motion2，但是它本来只提供9宫格，我就改成了浮点函数，现在可以随意移动）。reset可以重新居中
 7. 常用表达式片段（个人）。**可以自己在jsx文件的头部新增自己的表达式，定义功能**。
 
-![](./media/panel4.png)
+![](https://v.guediao.top/mygithub/AeGlobalController/panel4.png)
 
 
 8. 色板：暂时没有拾色器，色板可长期存储，不过只有15个位，点击 push 可以推入新的颜色（通过#HEX）
 
 9. 中英查找：这个是个人因为从中切换到英文版，一些效果器不知道英文叫什么，每次都要查很麻烦。（最大正向匹配法）
 
-![](./media/panel5.png)
+![](https://v.guediao.top/mygithub/AeGlobalController/panel5.png)
 
 查找到后，可以在右边选择，按apply直接添加到已选图层
 
 10. 调试器：提供log面板，同时也可以直接调用。调试器会直接调用``try{eval( $YOUR_INPUT$ )}catch(e){alert(e)}``函数
 
-![](./media/panel6.png)
+![](https://v.guediao.top/mygithub/AeGlobalController/panel6.png)
 
 11. 本地调用：可以选择已经写好的内容直接调用os函数
 
-![](./media/panel7.png)
+![](https://v.guediao.top/mygithub/AeGlobalController/panel7.png)
 
 从上到下内容依次是：记事本、计算器、画板，最后一个是**AE多开**
 
