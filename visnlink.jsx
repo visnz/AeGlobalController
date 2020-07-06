@@ -87,7 +87,7 @@ function UI(object,colorPanel){
         "outsideGroup: Group {text:'iconBtn功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
             "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
                 "lineA: Panel {text:'脚本管理器', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
-                    "tlistBox: ListBox { alignment:['fill','fill'], preferredSize:[100,250]},"+
+                    "tlistBox: ListBox { alignment:['fill','fill'], preferredSize:[50,250]},"+
                     "tfooter: Group { talignment:['fill','bottom'], "+
                         "tfolder: Button { text:'Folder', alignment:['left','center'] }, "+
                         "trefresh: Button { text:'刷新', alignment:['right','center'] }, "+
@@ -980,7 +980,7 @@ function urlFilter(readState_body,keyword){
                             prop.setInterpolationTypeAtKey(prop.selectedKeys[k], KeyframeInterpolationType.HOLD)
                         } else {
                             var easeIn = new KeyframeEase(0, number2);
-                            var easeOut = new KeyframeEase(prop.keyOutTemporalEase(prop.selectedKeys[k])[0].speed, prop.keyOutTemporalEase(prop.selectedKeys[k])[0].influence);
+                            var easeOut = new KeyframeEase(prop.keyOutTemporalEase(prop.selectedKeys[k])[0].speed, Math.max(prop.keyOutTemporalEase(prop.selectedKeys[k])[0].influence,0.1));
                             if (!prop.isSpatial && prop.value.length == 3) {
                                 prop.setTemporalEaseAtKey(prop.selectedKeys[k], [easeIn, easeIn, easeIn], [easeOut, easeOut, easeOut])
                             } else if (!prop.isSpatial && prop.value.length == 2) {
@@ -1076,7 +1076,8 @@ function urlFilter(readState_body,keyword){
                             prop.setTemporalAutoBezierAtKey(prop.selectedKeys[k], true);
                         } else {
                             var easeOut = new KeyframeEase(0, number3);
-                            var easeIn = new KeyframeEase(prop.keyInTemporalEase(prop.selectedKeys[k])[0].speed, prop.keyInTemporalEase(prop.selectedKeys[k])[0].influence);
+	            
+                            var easeIn = new KeyframeEase(prop.keyInTemporalEase(prop.selectedKeys[k])[0].speed, Math.max(prop.keyInTemporalEase(prop.selectedKeys[k])[0].influence,0.1));
                             if (!prop.isSpatial && prop.value.length == 3) {
                                 prop.setTemporalEaseAtKey(prop.selectedKeys[k], [easeIn, easeIn, easeIn], [easeOut, easeOut, easeOut])
                             } else if (!prop.isSpatial && prop.value.length == 2) {
