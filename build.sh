@@ -12,6 +12,7 @@ ORDER=(
   src/motion2.jsx
   src/keyfast.jsx
   src/aggregators.jsx
+  src/tools.jsx
   src/ui.jsx
   src/main.jsx
 )
