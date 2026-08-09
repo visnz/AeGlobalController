@@ -1,7 +1,27 @@
 function UI(object,colorPanel){
     var myPalette = (object instanceof Panel)?object : new Window("palette","桶子工具箱", undefined, {resizeable: true})
-    var content=""+
+
+    // 顶层容器 + 分页按钮 + log
+    var topContent=""+
     "group {orientation:'column', alignment:['fill','fill'], spacing:5, "+
+        "tabRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
+            "tabTools: Button {text:'Tools', alignment:['fill','fill'], preferredSize:[80,25]}, "+
+            "tabCache: Button {text:'Cache', alignment:['fill','fill'], preferredSize:[80,25]}"+
+        "}, "+
+        "panelContainer: Group {alignment:['fill','fill'], orientation:'column', spacing:5}, "+
+        "logGroup: Group {text:'log功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
+            "logToggle: Button {text:'Log: OFF', alignment:['fill','top'], preferredSize:[100,20]},"+
+            "logPanel: Panel {text:'Log', alignment:['fill','top'], visible:false, orientation:'column', spacing:5 ,"+
+                "logText: EditText {text:'', alignment:['fill','fill'], properties:{multiline:true}, preferredSize:[200,120]}"+
+            "}"+
+        "}"+
+    "}"
+    myPalette.grp = myPalette.add(topContent);
+    myPalette.layout.layout(true);
+
+    // Tools 分页内容
+    var toolsContent=""+
+    "Group {orientation:'column', alignment:['fill','fill'], spacing:5, "+
         "outsideGroup: Group {text:'iconBtn功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
             "line1: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
                 "lineB: Panel {text:'集成脚本', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
@@ -44,49 +64,49 @@ function UI(object,colorPanel){
                                     "lab: StaticText {text:'out', preferredSize:[28,18]},"+
                                     "slider: Slider {minvalue:1, maxvalue:99, value:50, alignment:['fill','top'], preferredSize:[70,18]},"+
                                     "val: EditText {text:'50', alignment:['fill','top'], preferredSize:[30,18], properties:{multiline:false}}"+
-                                "},"+
+                                "}"+
                             "},"+
                             "lineB: Panel {text:'AnchorMove', alignment:['fill','top'], orientation:'row', spacing:2 ,"+
                                 "grid: Group {alignment:['left','top'], orientation:'column', spacing:0 ,"+
                                     "row0: Group {alignment:['left','top'], orientation:'row', spacing:0 ,"+
                                         "tl: Button {text:'┌', preferredSize:[22,18]},"+
                                         "tc: Button {text:'┬', preferredSize:[22,18]},"+
-                                        "tr: Button {text:'┐', preferredSize:[22,18]},"+
+                                        "tr: Button {text:'┐', preferredSize:[22,18]}"+
                                     "},"+
                                     "row1: Group {alignment:['left','top'], orientation:'row', spacing:0 ,"+
                                         "ml: Button {text:'├', preferredSize:[22,18]},"+
                                         "mc: Button {text:'┼', preferredSize:[22,18]},"+
-                                        "mr: Button {text:'┤', preferredSize:[22,18]},"+
+                                        "mr: Button {text:'┤', preferredSize:[22,18]}"+
                                     "},"+
                                     "row2: Group {alignment:['left','top'], orientation:'row', spacing:0 ,"+
                                         "bl: Button {text:'└', preferredSize:[22,18]},"+
                                         "bc: Button {text:'┴', preferredSize:[22,18]},"+
-                                        "br: Button {text:'┘', preferredSize:[22,18]},"+
-                                    "},"+
+                                        "br: Button {text:'┘', preferredSize:[22,18]}"+
+                                    "}"+
                                 "},"+
                                 "inputs: Group {alignment:['fill','top'], orientation:'column', spacing:2 ,"+
                                     "xRow: Group {alignment:['fill','top'], orientation:'row', spacing:2 ,"+
                                         "lab: StaticText {text:'x', preferredSize:[16,18]},"+
-                                        "xVal: EditText {text:'50', alignment:['fill','top'], preferredSize:[36,18], properties:{multiline:false}},"+
+                                        "xVal: EditText {text:'50', alignment:['fill','top'], preferredSize:[36,18], properties:{multiline:false}}"+
                                     "},"+
                                     "yRow: Group {alignment:['fill','top'], orientation:'row', spacing:2 ,"+
                                         "lab: StaticText {text:'y', preferredSize:[16,18]},"+
-                                        "yVal: EditText {text:'50', alignment:['fill','top'], preferredSize:[36,18], properties:{multiline:false}},"+
+                                        "yVal: EditText {text:'50', alignment:['fill','top'], preferredSize:[36,18], properties:{multiline:false}}"+
                                     "},"+
-                                    "reset: Button {text:'Reset', preferredSize:[58,20]},"+
-                                "},"+
-                            "},"+
+                                    "reset: Button {text:'Reset', preferredSize:[58,20]}"+
+                                "}"+
+                            "}"+
                         "},"+
                         "line5: Group {text:'功能', alignment:['fill','top'], orientation:'column', spacing:0 ,"+
-                            "listBox: ListBox { alignment:['fill','fill'], preferredSize:[80,180]},"+
-                        "},"+
-                    "},"+
-                "},"+
-            "},"+
+                            "listBox: ListBox { alignment:['fill','fill'], preferredSize:[80,180]}"+
+                        "}"+
+                    "}"+
+                "}"+
+            "}"+
         "},"+
         "colorGroup: Panel {text:'色板', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
-            "line1: Group {text:'色板', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
-            "},"+
+            "line1: Group {text:'色板', alignment:['fill','top'], orientation:'row', spacing:5, preferredSize:[200,35] "+
+            "}"+
         "},"+
         "transGroup: Group {text:'trans功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
             "line1: Panel {text:'中英查找', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
@@ -94,46 +114,96 @@ function UI(object,colorPanel){
                 "sc2enB: Button {text:'SCtoEN', alignment:['fill','top'], preferredSize:[30,25]},"+
                 "en2scB: Button {text:'ENtoSC', alignment:['fill','top'], preferredSize:[30,25]},"+
                 "listbox: DropDownList{alignment:['fill','top'], preferredSize:[200,25]},"+
-                "apply: Button {text:'Apply', alignment:['fill','top'], preferredSize:[30,25]},"+
-            "},"+
-        "},"+
+                "apply: Button {text:'Apply', alignment:['fill','top'], preferredSize:[30,25]}"+
+            "}"+
+        "}"+
     "}"
-    myPalette.grp = myPalette.add(content);
+    var tp = myPalette.grp.panelContainer.add(toolsContent);
+
+    // Cache 分页内容
+    var cacheContent=""+
+    "Group {orientation:'column', alignment:['fill','fill'], spacing:5, visible:false, "+
+        "templateRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
+            "lab: StaticText {text:'Template:', preferredSize:[50,20]}, "+
+            "template: EditText {text:'OF_Cache_CineForm_RGBA16_Q4', alignment:['fill','center'], preferredSize:[200,20], properties:{multiline:false}}"+
+        "}, "+
+        "folderRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
+            "lab: StaticText {text:'Cache:', preferredSize:[40,20]}, "+
+            "path: StaticText {text:'未设置', alignment:['fill','center'], preferredSize:[200,20]}, "+
+            "setBtn: Button {text:'Set', preferredSize:[40,20]}"+
+        "}, "+
+        "listLabel: StaticText {text:'依赖树（双击切换勾选）', alignment:['fill','top'], preferredSize:[300,18]}, "+
+        "list: ListBox {alignment:['fill','top'], preferredSize:[300,120]}, "+
+        "btnRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
+            "refresh: Button {text:'Refresh', preferredSize:[60,25]}, "+
+            "cacheSel: Button {text:'Cache', preferredSize:[100,25]}"+
+        "}, "+
+        "status: StaticText {text:'Ready', alignment:['fill','top'], preferredSize:[300,20]}"+
+    "}"
+    var cp = myPalette.grp.panelContainer.add(cacheContent);
+
+    // 缓存输出模块模板名可编辑并持久化
+    cp.templateRow.template.text = OF_Tools_getCacheOutputModuleTemplate();
+    cp.templateRow.template.onChange = function(){
+        OF_Tools_saveCacheOutputModuleTemplate(cp.templateRow.template.text);
+    };
+
     myPalette.layout.layout(true);
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"1.随机变换..randomTransform()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"2.文本拆分..textSplitor()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"3.图层时间偏移..layersShifter()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"4.层空间排列..layerToGrid()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"5.层空间分裂..layerSplitor()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"6.阵列步进..stepByChange()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"7.层隔行选择..layersSelector()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"8.层随机选择..randomLayersSelector()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"9.层排序..layersSortor()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"A.烘焙..bake()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"B.合成扩大..scaleComposition()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"C.图层扩大..scaleSelectedLayers()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"D.图层重命名..layersRenamer()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"E.渐变调光..rampLight()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"F.全景图创建..360creator()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"G.阴影材质..shadeIt()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"H.电路板集成..circuitFX()")
-    myPalette.grp.outsideGroup.line1.lineB.line0.listBox.add('item',"I.背景板集成..quadrateFX()")
+
+    // 分页切换
+    function switchTab(tab){
+        if(tab === 'tools'){
+            tp.visible = true;
+            cp.visible = false;
+            myPalette.grp.tabRow.tabTools.text = '● Tools';
+            myPalette.grp.tabRow.tabCache.text = 'Cache';
+        } else {
+            tp.visible = false;
+            cp.visible = true;
+            myPalette.grp.tabRow.tabTools.text = 'Tools';
+            myPalette.grp.tabRow.tabCache.text = '● Cache';
+        }
+        myPalette.layout.layout(true);
+        myPalette.layout.resize();
+    }
+    myPalette.grp.tabRow.tabTools.onClick = function(){ switchTab('tools'); };
+    myPalette.grp.tabRow.tabCache.onClick = function(){ switchTab('cache'); };
+    switchTab('tools');
+
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"1.随机变换..randomTransform()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"2.文本拆分..textSplitor()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"3.图层时间偏移..layersShifter()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"4.层空间排列..layerToGrid()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"5.层空间分裂..layerSplitor()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"6.阵列步进..stepByChange()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"7.层隔行选择..layersSelector()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"8.层随机选择..randomLayersSelector()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"9.层排序..layersSortor()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"A.烘焙..bake()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"B.合成扩大..scaleComposition()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"C.图层扩大..scaleSelectedLayers()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"D.图层重命名..layersRenamer()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"E.渐变调光..rampLight()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"F.全景图创建..360creator()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"G.阴影材质..shadeIt()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"H.电路板集成..circuitFX()")
+    tp.outsideGroup.line1.lineB.line0.listBox.add('item',"I.背景板集成..quadrateFX()")
 // #DEVPOINT#
-    myPalette.grp.outsideGroup.line1.lineB.line0.apply.onClick=function(){
-        if(!myPalette.grp.outsideGroup.line1.lineB.line0.listBox.selection)return
-        var text=myPalette.grp.outsideGroup.line1.lineB.line0.listBox.selection.text
+    tp.outsideGroup.line1.lineB.line0.apply.onClick=function(){
+        if(!tp.outsideGroup.line1.lineB.line0.listBox.selection)return
+        var text=tp.outsideGroup.line1.lineB.line0.listBox.selection.text
         eval("aggr_"+text.split("..")[1])
     }
     for(var a=0;a<expArray.length;a++){
-        myPalette.grp.outsideGroup.line1.lineB.line3.line5.listBox.add("item",expArray[a])
+        tp.outsideGroup.line1.lineB.line3.line5.listBox.add("item",expArray[a])
     }
-    myPalette.grp.outsideGroup.line1.lineB.line3.line5.listBox.onDoubleClick=function(){
-        var scriptSelected = myPalette.grp.outsideGroup.line1.lineB.line3.line5.listBox.selection != null;
+    tp.outsideGroup.line1.lineB.line3.line5.listBox.onDoubleClick=function(){
+        var scriptSelected = tp.outsideGroup.line1.lineB.line3.line5.listBox.selection != null;
         if (scriptSelected) {
             if(!app.project.activeItem)return
             if(!app.project.activeItem.selectedLayers)return
             app.beginUndoGroup("exp_add")
-            var scriptIndex = myPalette.grp.outsideGroup.line1.lineB.line3.line5.listBox.selection.index;
+            var scriptIndex = tp.outsideGroup.line1.lineB.line3.line5.listBox.selection.index;
             for (var i = 0; i < app.project.activeItem.selectedLayers.length; i += 1) {
                 for (var j = 0; j < app.project.activeItem.selectedLayers[i].selectedProperties.length; j += 1) {
                     app.project.activeItem.selectedLayers[i].selectedProperties[j].expression=eval("exp_"+expArray[scriptIndex].split("..")[1]+"(app.project.activeItem.selectedLayers[i])")
@@ -143,7 +213,7 @@ function UI(object,colorPanel){
         }
     }
 
-    var easePanel = myPalette.grp.outsideGroup.line1.lineB.line3.line4.lineA;
+    var easePanel = tp.outsideGroup.line1.lineB.line3.line4.lineA;
     function clampEase(v){ v = parseInt(v,10)||1; return Math.max(1, Math.min(99, v)); }
     function bindEaseRow(row, fn){
         function apply(){ var v = clampEase(row.val.text); row.val.text = String(v); if(row.slider.value != v) row.slider.value = v; fn(v); }
@@ -154,7 +224,7 @@ function UI(object,colorPanel){
     bindEaseRow(easePanel.easeRow, OF_Motion2_makeMotion);
     bindEaseRow(easePanel.easeOutRow, OF_Motion2_outMotion);
 
-    var anchorPanel = myPalette.grp.outsideGroup.line1.lineB.line3.line4.lineB;
+    var anchorPanel = tp.outsideGroup.line1.lineB.line3.line4.lineB;
     function applyAnchor(){
         var x = parseInt(anchorPanel.inputs.xRow.xVal.text,10)||0;
         var y = parseInt(anchorPanel.inputs.yRow.yVal.text,10)||0;
@@ -178,21 +248,31 @@ function UI(object,colorPanel){
     anchorPanel.inputs.yRow.yVal.onChange = applyAnchor;
     anchorPanel.inputs.reset.onClick = function(){ setAnchor(50,50); }
 
-    myPalette.grp.outsideGroup.line1.lineB.line1.Fi.onClick=OF_Keyfast_fadeIn
-    myPalette.grp.outsideGroup.line1.lineB.line1.Fo.onClick=OF_Keyfast_fadeOut
-    myPalette.grp.outsideGroup.line1.lineB.line1.Su.onClick=OF_Keyfast_scaleUp
-    myPalette.grp.outsideGroup.line1.lineB.line1.Sd.onClick=OF_Keyfast_scaleDown
-    myPalette.grp.outsideGroup.line1.lineB.line1.Rl.onClick=OF_Keyfast_rotateLeft
-    myPalette.grp.outsideGroup.line1.lineB.line1.Rr.onClick=OF_Keyfast_rotateRight
-    myPalette.grp.outsideGroup.line1.lineB.line1.Cl.onClick=OF_Keyfast_cloneKeys
-    myPalette.grp.outsideGroup.line1.lineB.line1.Rv.onClick=OF_Keyfast_timeReverse
-    myPalette.grp.outsideGroup.line1.lineB.line1.Nul.onClick=OF_Motion2_createANull
-    myPalette.grp.outsideGroup.line1.lineB.line1.Vig.onClick=OF_Motion2_createVignRig
-    myPalette.grp.outsideGroup.line1.lineB.line2.mb.onClick=OF_Tools_enableMotionBlur
-    myPalette.grp.outsideGroup.line1.lineB.line2.ext.onClick=OF_Tools_extendOutTime30s
+    tp.outsideGroup.line1.lineB.line1.Fi.onClick=OF_Keyfast_fadeIn
+    tp.outsideGroup.line1.lineB.line1.Fo.onClick=OF_Keyfast_fadeOut
+    tp.outsideGroup.line1.lineB.line1.Su.onClick=OF_Keyfast_scaleUp
+    tp.outsideGroup.line1.lineB.line1.Sd.onClick=OF_Keyfast_scaleDown
+    tp.outsideGroup.line1.lineB.line1.Rl.onClick=OF_Keyfast_rotateLeft
+    tp.outsideGroup.line1.lineB.line1.Rr.onClick=OF_Keyfast_rotateRight
+    tp.outsideGroup.line1.lineB.line1.Cl.onClick=OF_Keyfast_cloneKeys
+    tp.outsideGroup.line1.lineB.line1.Rv.onClick=OF_Keyfast_timeReverse
+    tp.outsideGroup.line1.lineB.line1.Nul.onClick=OF_Motion2_createANull
+    tp.outsideGroup.line1.lineB.line1.Vig.onClick=OF_Motion2_createVignRig
+    tp.outsideGroup.line1.lineB.line2.mb.onClick=OF_Tools_enableMotionBlur
+    tp.outsideGroup.line1.lineB.line2.ext.onClick=OF_Tools_extendOutTime30s
+
+    // log面板
+    myPalette.grp.logGroup.logToggle.onClick=function(){
+        var visible = !myPalette.grp.logGroup.logPanel.visible;
+        myPalette.grp.logGroup.logPanel.visible = visible;
+        myPalette.grp.logGroup.logToggle.text = visible ? "Log: ON" : "Log: OFF";
+        myPalette.layout.layout(true);
+        myPalette.layout.resize();
+    }
+    OF_Log_setPanel(myPalette.grp.logGroup.logPanel);
 
     // color面板
-    var colorBtn=myPalette.grp.colorGroup.line1.add("button",[0,0,100,25],"Push Color")
+    var colorBtn=tp.colorGroup.line1.add("button",[0,0,100,25],"Push Color")
     colorBtn.onClick=function(){
         var res=prompt("hex color","#C0FFEE");
         if(!res)return;
@@ -205,20 +285,20 @@ function UI(object,colorPanel){
     }
 
     for(var i=0;i<15;i++){
-        colorPanel[i] = myPalette.grp.colorGroup.line1.add("panel", [0,0,25,25]);
+        colorPanel[i] = tp.colorGroup.line1.add("panel", [0,0,25,25]);
     }
     drawColortoPanel(colorPanel)
 
     // trans界面
-    myPalette.grp.transGroup.line1.apply.onClick=function() {
-        if(!myPalette.grp.transGroup.line1.listbox.selection)return
-        var effect=myPalette.grp.transGroup.line1.listbox.selection.text
+    tp.transGroup.line1.apply.onClick=function() {
+        if(!tp.transGroup.line1.listbox.selection)return
+        var effect=tp.transGroup.line1.listbox.selection.text
         if(effect=="")return
         addEffects(effect.split("【")[0])
         addEffects(effect.split("】")[1])
     }
-    myPalette.grp.transGroup.line1.sc2enB.onClick=function() {
-        var en=myPalette.grp.transGroup.line1.search.text
+    tp.transGroup.line1.sc2enB.onClick=function() {
+        var en=tp.transGroup.line1.search.text
         dicInitNow()
         var result=[]
         for(var ind = 0; ind < dictionarykeys.length; ind++ ){
@@ -240,14 +320,14 @@ function UI(object,colorPanel){
                 }
             }
         }
-        myPalette.grp.transGroup.line1.listbox.removeAll()
+        tp.transGroup.line1.listbox.removeAll()
         for (var k = 0; k <result.length;k++) {
             var text=result[k][1]+"【"+k+"】"+result[k][0]
-            myPalette.grp.transGroup.line1.listbox.add('item',text)
+            tp.transGroup.line1.listbox.add('item',text)
         }
     }
-    myPalette.grp.transGroup.line1.en2scB.onClick=function() {
-        var en=myPalette.grp.transGroup.line1.search.text
+    tp.transGroup.line1.en2scB.onClick=function() {
+        var en=tp.transGroup.line1.search.text
         dicInitNow()
         var result=[]
         for(var ind = 0; ind < dictionarykeys.length; ind++ ){
@@ -269,12 +349,16 @@ function UI(object,colorPanel){
                 }
             }
         }
-        myPalette.grp.transGroup.line1.listbox.removeAll()
+        tp.transGroup.line1.listbox.removeAll()
         for (var k = 0; k <result.length;k++) {
             var text=result[k][1]+"【"+k+"】"+result[k][0]
-            myPalette.grp.transGroup.line1.listbox.add('item',text)
+            tp.transGroup.line1.listbox.add('item',text)
         }
     }
+
+    // 缓存管理器直接嵌入 Cache 分页
+    OF_Tools_initCachePanel(cp);
+
     // 设置画面显示
     myPalette.layout.resize();
     // 设置完自适应调整
