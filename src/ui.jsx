@@ -5,10 +5,10 @@ function UI(object,colorPanel){
     var topContent=""+
     "group {orientation:'column', alignment:['fill','fill'], spacing:5, "+
         "tabRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
-            "tabTools: Button {text:'Tools', alignment:['fill','fill'], preferredSize:[80,25]}, "+
-            "tabCache: Button {text:'Cache', alignment:['fill','fill'], preferredSize:[80,25]}"+
+            "tabTools: Button {text:'工具', alignment:['fill','fill'], preferredSize:[80,25]}, "+
+            "tabCache: Button {text:'缓存', alignment:['fill','fill'], preferredSize:[80,25]}"+
         "}, "+
-        "panelContainer: Group {alignment:['fill','fill'], orientation:'column', spacing:5}, "+
+        "panelContainer: Group {alignment:['fill','fill'], orientation:'stack', spacing:0}, "+
         "logGroup: Group {text:'log功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
             "logToggle: Button {text:'Log: OFF', alignment:['fill','top'], preferredSize:[100,20]},"+
             "logPanel: Panel {text:'Log', alignment:['fill','top'], visible:false, orientation:'column', spacing:5 ,"+
@@ -120,27 +120,67 @@ function UI(object,colorPanel){
     "}"
     var tp = myPalette.grp.panelContainer.add(toolsContent);
 
-    // Cache 分页内容
-    var cacheContent=""+
-    "Group {orientation:'column', alignment:['fill','fill'], spacing:5, visible:false, "+
-        "templateRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
-            "lab: StaticText {text:'Template:', preferredSize:[50,20]}, "+
-            "template: EditText {text:'OF_Cache_CineForm_RGBA16_Q4', alignment:['fill','center'], preferredSize:[200,20], properties:{multiline:false}}"+
-        "}, "+
-        "folderRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
-            "lab: StaticText {text:'Cache:', preferredSize:[40,20]}, "+
-            "path: StaticText {text:'未设置', alignment:['fill','center'], preferredSize:[200,20]}, "+
-            "setBtn: Button {text:'Set', preferredSize:[40,20]}"+
-        "}, "+
-        "listLabel: StaticText {text:'依赖树（双击切换勾选）', alignment:['fill','top'], preferredSize:[300,18]}, "+
-        "list: ListBox {alignment:['fill','top'], preferredSize:[300,120]}, "+
-        "btnRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
-            "refresh: Button {text:'Refresh', preferredSize:[60,25]}, "+
-            "cacheSel: Button {text:'Cache', preferredSize:[100,25]}"+
-        "}, "+
-        "status: StaticText {text:'Ready', alignment:['fill','top'], preferredSize:[300,20]}"+
-    "}"
-    var cp = myPalette.grp.panelContainer.add(cacheContent);
+    // Cache 分页内容。逐个创建控件，避免复杂资源字符串解析失败。
+    var cp = myPalette.grp.panelContainer.add("group");
+    cp.orientation = "column";
+    cp.alignment = ["fill", "top"];
+    cp.spacing = 5;
+    cp.visible = false;
+
+    cp.actionRow = cp.add("group");
+    cp.actionRow.orientation = "row";
+    cp.actionRow.alignment = ["fill", "top"];
+    cp.actionRow.spacing = 5;
+    cp.actionRow.addComp = cp.actionRow.add("button", undefined, "添加当前合成");
+    cp.actionRow.addComp.preferredSize = [105, 25];
+    cp.actionRow.cacheAll = cp.actionRow.add("button", undefined, "开始缓存");
+    cp.actionRow.cacheAll.preferredSize = [105, 25];
+    cp.actionRow.refresh = cp.actionRow.add("button", undefined, "刷新");
+    cp.actionRow.refresh.preferredSize = [65, 25];
+
+    cp.templateRow = cp.add("group");
+    cp.templateRow.orientation = "row";
+    cp.templateRow.alignment = ["fill", "top"];
+    cp.templateRow.spacing = 5;
+    cp.templateRow.lab = cp.templateRow.add("statictext", undefined, "输出模板:");
+    cp.templateRow.lab.preferredSize = [50, 20];
+    cp.templateRow.template = cp.templateRow.add("edittext", undefined, "OF_Cache_CineForm_RGBA16_Q4");
+    cp.templateRow.template.alignment = ["fill", "center"];
+    cp.templateRow.template.preferredSize = [200, 20];
+
+    cp.folderRow = cp.add("group");
+    cp.folderRow.orientation = "row";
+    cp.folderRow.alignment = ["fill", "top"];
+    cp.folderRow.spacing = 5;
+    cp.folderRow.lab = cp.folderRow.add("statictext", undefined, "缓存目录:");
+    cp.folderRow.lab.preferredSize = [40, 20];
+    cp.folderRow.path = cp.folderRow.add("statictext", undefined, "未设置");
+    cp.folderRow.path.alignment = ["fill", "center"];
+    cp.folderRow.path.preferredSize = [200, 20];
+    cp.folderRow.setBtn = cp.folderRow.add("button", undefined, "设置");
+    cp.folderRow.setBtn.preferredSize = [40, 20];
+
+    cp.listLabel = cp.add("statictext", undefined, "缓存列表（双击切换，按顺序执行）");
+    cp.listLabel.alignment = ["fill", "top"];
+    cp.listLabel.preferredSize = [300, 18];
+    cp.list = cp.add("listbox", undefined, undefined);
+    cp.list.alignment = ["fill", "top"];
+    cp.list.preferredSize = [300, 150];
+
+    cp.btnRow = cp.add("group");
+    cp.btnRow.orientation = "row";
+    cp.btnRow.alignment = ["fill", "top"];
+    cp.btnRow.spacing = 5;
+    cp.btnRow.moveUp = cp.btnRow.add("button", undefined, "↑");
+    cp.btnRow.moveUp.preferredSize = [45, 22];
+    cp.btnRow.moveDown = cp.btnRow.add("button", undefined, "↓");
+    cp.btnRow.moveDown.preferredSize = [50, 22];
+    cp.btnRow.removeItem = cp.btnRow.add("button", undefined, "删除");
+    cp.btnRow.removeItem.preferredSize = [60, 22];
+
+    cp.status = cp.add("statictext", undefined, "缓存列表为空");
+    cp.status.alignment = ["fill", "top"];
+    cp.status.preferredSize = [300, 20];
 
     // 缓存输出模块模板名可编辑并持久化
     cp.templateRow.template.text = OF_Tools_getCacheOutputModuleTemplate();
@@ -155,16 +195,19 @@ function UI(object,colorPanel){
         if(tab === 'tools'){
             tp.visible = true;
             cp.visible = false;
-            myPalette.grp.tabRow.tabTools.text = '● Tools';
-            myPalette.grp.tabRow.tabCache.text = 'Cache';
+            myPalette.grp.tabRow.tabTools.text = '● 工具';
+            myPalette.grp.tabRow.tabCache.text = '缓存';
         } else {
             tp.visible = false;
             cp.visible = true;
-            myPalette.grp.tabRow.tabTools.text = 'Tools';
-            myPalette.grp.tabRow.tabCache.text = '● Cache';
+            myPalette.grp.tabRow.tabTools.text = '工具';
+            myPalette.grp.tabRow.tabCache.text = '● 缓存';
         }
         myPalette.layout.layout(true);
         myPalette.layout.resize();
+        if(tab !== 'tools'){
+            try { cp.list.active = true; } catch(e){}
+        }
     }
     myPalette.grp.tabRow.tabTools.onClick = function(){ switchTab('tools'); };
     myPalette.grp.tabRow.tabCache.onClick = function(){ switchTab('cache'); };

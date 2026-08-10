@@ -1,4 +1,4 @@
-//============ 表达式片段 ==========//
+﻿//============ 表达式片段 ==========//
 var expArray=[]
 expArray.push("1.抖动控制器..wiggleControl")
 expArray.push("2.循环..loopOutCycle")
@@ -1903,6 +1903,20 @@ function OF_Tools_renderCompToMOV(comp, movPath){
     }
     om.file = new File(movPath);
     OF_Log("[render] 已设置输出路径：" + movPath);
+    // 缓存操作需要在本次点击内完成渲染，之后才能立即导入 MOV。
+    // 这里使用 AE 的同步渲染接口；用户点击 Start Cache 后会看到 AE 进入渲染状态。
+    try {
+        app.project.renderQueue.render();
+    } catch(e){
+        OF_Log("[render] 渲染失败：" + e.toString());
+        throw e;
+    }
+    var renderedFile = new File(movPath);
+    if(!renderedFile.exists){
+        throw new Error("渲染结束但未找到输出文件：" + movPath);
+    }
+    OF_Log("[render] 渲染完成：" + movPath);
+    return renderedFile;
 }
 
 function OF_Tools_importAndPlaceMOV(precomp, movPath, sourceComp){
@@ -1911,14 +1925,32 @@ function OF_Tools_importAndPlaceMOV(precomp, movPath, sourceComp){
     if(!movFile.exists){
         throw new Error("缓存文件未生成：" + movPath);
     }
-    var io = new ImportOptions(movFile);
-    var footage = app.project.importFile(io);
-    OF_Log("[import] 导入成功：" + footage.name);
+    // 重复缓存时复用已有 FootageItem，避免 AE 对同一个 MOV 重复弹导入选项。
+    var footage = null;
+    for(var i = 1; i <= app.project.items.length; i++){
+        var item = app.project.items[i];
+        if(item instanceof FootageItem && item.file){
+            try {
+                if(item.file.fsName === movFile.fsName){
+                    footage = item;
+                    break;
+                }
+            } catch(e){}
+        }
+    }
+    if(!footage){
+        var io = new ImportOptions(movFile);
+        footage = app.project.importFile(io);
+        OF_Log("[import] 导入成功：" + footage.name);
+    } else {
+        OF_Log("[import] 复用已有素材：" + footage.name);
+    }
     var cacheFolder = OF_Tools_getOrCreateCacheFolder();
     if(cacheFolder) footage.parentFolder = cacheFolder;
 
     var movLayer = precomp.layers.add(footage);
-    movLayer.moveToEnd();
+    // 缓存层放在最顶层，原合成层放在最底层并禁用。
+    movLayer.moveToBeginning();
     try { movLayer.solo = true; } catch(e){}
 
     // 把原合成层再确保移到底层
@@ -1931,14 +1963,22 @@ function OF_Tools_importAndPlaceMOV(precomp, movPath, sourceComp){
         }
     }
     if(sourceLayer){
-        sourceLayer.moveToBeginning();
+        sourceLayer.moveToEnd();
         try { sourceLayer.enabled = false; } catch(e){}
     }
 }
 
+function OF_Tools_sanitizeCacheName(name){
+    var result = name || "Untitled";
+    try { result = decodeURI(result); } catch(e){}
+    try { result = decodeURIComponent(result); } catch(e){}
+    result = result.replace(/[\\\/\:\*\?\"\<\>\|]/g, "_");
+    return result || "Untitled";
+}
+
 function OF_Tools_getProjectNameForCache(){
     if(app.project && app.project.file){
-        return app.project.file.name.replace(/\.aepx?$/i, "");
+        return OF_Tools_sanitizeCacheName(app.project.file.name.replace(/\.aepx?$/i, ""));
     }
     return "Untitled";
 }
@@ -1962,17 +2002,23 @@ function OF_Tools_cacheOneComp(targetComp, cacheFolderPath){
     OF_Tools_ensurePrecompLayers(precomp, sourceComp);
 
     var projectName = OF_Tools_getProjectNameForCache();
-    var cacheDir = cacheFolderPath + "/" + projectName + "/Cache";
+    var cacheRootFolder = new Folder(cacheFolderPath);
+    if(!cacheRootFolder.exists) cacheRootFolder.create();
+    var cacheDir = cacheRootFolder.fsName + "/" + projectName + "/Cache";
     var cacheDirFolder = new Folder(cacheDir);
     if(!cacheDirFolder.exists) cacheDirFolder.create();
-    var movPath = cacheDir + "/" + sourceComp.name + "_cache.mov";
+    var movPath = cacheDirFolder.fsName + "/" + OF_Tools_sanitizeCacheName(sourceComp.name) + "_cache.mov";
     OF_Log("[cacheOne] 缓存路径：" + movPath);
 
-    OF_Tools_renderCompToMOV(sourceComp, movPath);
+    var rendered = false;
+    try {
+        rendered = !!OF_Tools_renderCompToMOV(sourceComp, movPath);
+    } catch(e){
+        OF_Log("[cacheOne] 渲染异常，启用原合成 fallback：" + e.toString());
+    }
 
-    var movFile = new File(movPath);
-    if(movFile.exists){
-        OF_Log("[cacheOne] MOV 已存在，开始导入替换");
+    if(rendered){
+        OF_Log("[cacheOne] MOV 已生成，立即导入并替换");
         OF_Tools_importAndPlaceMOV(precomp, movPath, sourceComp);
     } else {
         OF_Log("[cacheOne] MOV 尚未生成，启用原合成作为 fallback");
@@ -1996,7 +2042,7 @@ function OF_Tools_cacheCompList(comps, cacheFolderPath){
     for(var i = 0; i < comps.length; i++){
         OF_Tools_cacheOneComp(comps[i], cacheFolderPath);
     }
-    OF_Log("[cacheList] 全部加入队列完成");
+    OF_Log("[cacheList] 全部缓存完成");
 }
 
 function OF_Tools_getCacheFolderPath(){
@@ -2016,7 +2062,7 @@ function OF_Tools_promptAndSaveCacheFolder(){
 }
 
 function OF_Tools_initCachePanel(panel){
-    OF_Log("[CacheManager] 初始化 Cache Panel");
+    OF_Log("[CacheManager] 初始化 Cache Panel（手动列表模式）");
     if(!app.project){
         panel.status.text = "请先打开一个工程";
         return;
@@ -2025,49 +2071,60 @@ function OF_Tools_initCachePanel(panel){
     var cachePath = OF_Tools_getCacheFolderPath();
     panel.folderRow.path.text = cachePath ? cachePath : "未设置";
     OF_Log("[CacheManager] 缓存目录：" + cachePath);
+    // Cache 页面现在是用户手动维护的扁平列表：不再自动扫描依赖树。
+    // 每一项保存真实的 CompItem 引用、启用状态和用户调整后的顺序。
+    var cacheItems = [];
 
-    var allItems = [];
-    var visited = {};
-    var sorted = [];
-
-    function rebuild(){
-        allItems = [];
-        visited = {};
-        var comps = OF_Tools_getSelectedComps();
-        OF_Log("[CacheManager] 选中合成数：" + comps.length);
-        if(comps.length === 0){
-            panel.status.text = "未选中合成";
-            sorted = [];
-            refreshList();
-            return;
-        }
-        for(var i = 0; i < comps.length; i++){
-            OF_Tools_collectCompDependencies(comps[i], allItems, visited, 0);
-        }
-        sorted = OF_Tools_getDepthSortedComps(allItems);
-        OF_Log("[CacheManager] 依赖树共 " + sorted.length + " 个合成");
-        panel.status.text = "Ready: " + sorted.length + " comps";
-        refreshList();
+    function getListItemText(index){
+        var entry = cacheItems[index];
+        if(!entry) return "";
+        var prefix = entry.enabled ? "[x]" : "[ ]";
+        var preName = entry.comp.name + "_pre";
+        var cachedLabel = OF_Tools_findPrecompByName(preName) ? " [pre]" : "";
+        return (index + 1) + ". " + prefix + " " + entry.comp.name + cachedLabel;
     }
 
-    function refreshList(){
+    function refreshList(selectedIndex){
         panel.list.removeAll();
-        for(var i = 0; i < sorted.length; i++){
-            var c = sorted[i].comp;
-            var preName = c.name + "_pre";
-            var hasPre = !!OF_Tools_findPrecompByName(preName);
-            var prefix = sorted[i].checked ? "[x]" : "[ ]";
-            var cachedLabel = hasPre ? " [cached]" : "";
-            var depthLabel = "(d" + sorted[i].depth + ")";
-            panel.list.add("item", prefix + " " + c.name + " " + depthLabel + cachedLabel);
+        for(var i = 0; i < cacheItems.length; i++){
+            panel.list.add("item", getListItemText(i));
         }
+        if(selectedIndex !== undefined && selectedIndex >= 0 && selectedIndex < panel.list.items.length){
+            panel.list.selection = panel.list.items[selectedIndex];
+        }
+        panel.status.text = cacheItems.length ? (cacheItems.length + " 个合成") : "缓存列表为空";
+        try { panel.list.active = true; } catch(e){}
     }
 
     panel.list.onDoubleClick = function(){
         var idx = panel.list.selection ? panel.list.selection.index : -1;
         if(idx < 0) return;
-        sorted[idx].checked = !sorted[idx].checked;
-        refreshList();
+        cacheItems[idx].enabled = !cacheItems[idx].enabled;
+        // 原地更新文字，避免 removeAll/add 让焦点跳到其它按钮。
+        if(panel.list.items[idx]) panel.list.items[idx].text = getListItemText(idx);
+        panel.list.selection = panel.list.items[idx];
+        try { panel.list.active = true; } catch(e){}
+    };
+
+    panel.actionRow.addComp.onClick = function(){
+        var comps = OF_Tools_getSelectedComps();
+        if(!comps || comps.length === 0){
+            alert("请先在 AE 中打开或选择一个合成");
+            return;
+        }
+        var added = 0;
+        for(var i = 0; i < comps.length; i++){
+            var exists = false;
+            for(var j = 0; j < cacheItems.length; j++){
+                if(cacheItems[j].comp.id === comps[i].id){ exists = true; break; }
+            }
+            if(!exists){
+                cacheItems.push({comp: comps[i], enabled: true});
+                added++;
+            }
+        }
+        OF_Log("[CacheManager] 添加合成 " + added + " 个");
+        refreshList(cacheItems.length - 1);
     };
 
     panel.folderRow.setBtn.onClick = function(){
@@ -2079,37 +2136,56 @@ function OF_Tools_initCachePanel(panel){
         }
     };
 
-    panel.btnRow.refresh.onClick = function(){
-        rebuild();
+    panel.actionRow.refresh.onClick = function(){
+        // Refresh 只重新读取缓存目录和项目中的 _pre 状态，不改变用户列表和顺序。
+        cachePath = OF_Tools_getCacheFolderPath() || cachePath;
+        panel.folderRow.path.text = cachePath ? cachePath : "未设置";
+        refreshList(panel.list.selection ? panel.list.selection.index : -1);
     };
 
-    panel.btnRow.cacheSel.onClick = function(){
-        OF_Log("[CacheManager] 点击 Cache Selected");
+    panel.btnRow.moveUp.onClick = function(){
+        var idx = panel.list.selection ? panel.list.selection.index : -1;
+        if(idx <= 0) return;
+        var tmp = cacheItems[idx - 1];
+        cacheItems[idx - 1] = cacheItems[idx];
+        cacheItems[idx] = tmp;
+        refreshList(idx - 1);
+    };
+
+    panel.btnRow.moveDown.onClick = function(){
+        var idx = panel.list.selection ? panel.list.selection.index : -1;
+        if(idx < 0 || idx >= cacheItems.length - 1) return;
+        var tmp = cacheItems[idx + 1];
+        cacheItems[idx + 1] = cacheItems[idx];
+        cacheItems[idx] = tmp;
+        refreshList(idx + 1);
+    };
+
+    panel.btnRow.removeItem.onClick = function(){
+        var idx = panel.list.selection ? panel.list.selection.index : -1;
+        if(idx < 0) return;
+        cacheItems.splice(idx, 1);
+        refreshList(Math.min(idx, cacheItems.length - 1));
+    };
+
+    panel.actionRow.cacheAll.onClick = function(){
+        OF_Log("[CacheManager] 点击 Start Cache");
         try {
             if(!cachePath){
                 alert("请先点击 Set 设置缓存目录");
                 return;
             }
             var toCache = [];
-            for(var i = 0; i < sorted.length; i++){
-                if(sorted[i].checked) toCache.push(sorted[i].comp);
+            for(var i = 0; i < cacheItems.length; i++){
+                if(cacheItems[i].enabled) toCache.push(cacheItems[i].comp);
             }
             OF_Log("[CacheManager] 勾选合成数：" + toCache.length);
             if(toCache.length === 0){
                 alert("没有勾选任何合成");
                 return;
             }
-            var confirmMsg = "将按依赖顺序缓存以下 " + toCache.length + " 个合成：\n";
-            for(var i = 0; i < toCache.length; i++){
-                confirmMsg += "- " + toCache[i].name + "\n";
-            }
-            confirmMsg += "\n缓存目录：" + cachePath + "\n\n确认开始？脚本只会把渲染任务加入队列，请随后手动点击渲染。";
-            OF_Log("[CacheManager] 弹出确认对话框");
-            if(!confirm(confirmMsg)){
-                OF_Log("[CacheManager] 用户取消");
-                return;
-            }
-            OF_Log("[CacheManager] 用户确认，开始缓存");
+            OF_Log("[CacheManager] 按列表顺序开始缓存（渲染并立即导入）");
+            panel.status.text = "正在渲染并导入...";
 
             app.beginUndoGroup("Auto Cache");
             try {
@@ -2128,7 +2204,7 @@ function OF_Tools_initCachePanel(panel){
         }
     };
 
-    rebuild();
+    refreshList();
     OF_Log("[CacheManager] Cache Panel 初始化完成");
 }
 
@@ -2139,10 +2215,10 @@ function UI(object,colorPanel){
     var topContent=""+
     "group {orientation:'column', alignment:['fill','fill'], spacing:5, "+
         "tabRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
-            "tabTools: Button {text:'Tools', alignment:['fill','fill'], preferredSize:[80,25]}, "+
-            "tabCache: Button {text:'Cache', alignment:['fill','fill'], preferredSize:[80,25]}"+
+            "tabTools: Button {text:'工具', alignment:['fill','fill'], preferredSize:[80,25]}, "+
+            "tabCache: Button {text:'缓存', alignment:['fill','fill'], preferredSize:[80,25]}"+
         "}, "+
-        "panelContainer: Group {alignment:['fill','fill'], orientation:'column', spacing:5}, "+
+        "panelContainer: Group {alignment:['fill','fill'], orientation:'stack', spacing:0}, "+
         "logGroup: Group {text:'log功能', alignment:['fill','top'], orientation:'column', spacing:5 ,"+
             "logToggle: Button {text:'Log: OFF', alignment:['fill','top'], preferredSize:[100,20]},"+
             "logPanel: Panel {text:'Log', alignment:['fill','top'], visible:false, orientation:'column', spacing:5 ,"+
@@ -2254,27 +2330,67 @@ function UI(object,colorPanel){
     "}"
     var tp = myPalette.grp.panelContainer.add(toolsContent);
 
-    // Cache 分页内容
-    var cacheContent=""+
-    "Group {orientation:'column', alignment:['fill','fill'], spacing:5, visible:false, "+
-        "templateRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
-            "lab: StaticText {text:'Template:', preferredSize:[50,20]}, "+
-            "template: EditText {text:'OF_Cache_CineForm_RGBA16_Q4', alignment:['fill','center'], preferredSize:[200,20], properties:{multiline:false}}"+
-        "}, "+
-        "folderRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
-            "lab: StaticText {text:'Cache:', preferredSize:[40,20]}, "+
-            "path: StaticText {text:'未设置', alignment:['fill','center'], preferredSize:[200,20]}, "+
-            "setBtn: Button {text:'Set', preferredSize:[40,20]}"+
-        "}, "+
-        "listLabel: StaticText {text:'依赖树（双击切换勾选）', alignment:['fill','top'], preferredSize:[300,18]}, "+
-        "list: ListBox {alignment:['fill','top'], preferredSize:[300,120]}, "+
-        "btnRow: Group {alignment:['fill','top'], orientation:'row', spacing:5, "+
-            "refresh: Button {text:'Refresh', preferredSize:[60,25]}, "+
-            "cacheSel: Button {text:'Cache', preferredSize:[100,25]}"+
-        "}, "+
-        "status: StaticText {text:'Ready', alignment:['fill','top'], preferredSize:[300,20]}"+
-    "}"
-    var cp = myPalette.grp.panelContainer.add(cacheContent);
+    // Cache 分页内容。逐个创建控件，避免复杂资源字符串解析失败。
+    var cp = myPalette.grp.panelContainer.add("group");
+    cp.orientation = "column";
+    cp.alignment = ["fill", "top"];
+    cp.spacing = 5;
+    cp.visible = false;
+
+    cp.actionRow = cp.add("group");
+    cp.actionRow.orientation = "row";
+    cp.actionRow.alignment = ["fill", "top"];
+    cp.actionRow.spacing = 5;
+    cp.actionRow.addComp = cp.actionRow.add("button", undefined, "添加当前合成");
+    cp.actionRow.addComp.preferredSize = [105, 25];
+    cp.actionRow.cacheAll = cp.actionRow.add("button", undefined, "开始缓存");
+    cp.actionRow.cacheAll.preferredSize = [105, 25];
+    cp.actionRow.refresh = cp.actionRow.add("button", undefined, "刷新");
+    cp.actionRow.refresh.preferredSize = [65, 25];
+
+    cp.templateRow = cp.add("group");
+    cp.templateRow.orientation = "row";
+    cp.templateRow.alignment = ["fill", "top"];
+    cp.templateRow.spacing = 5;
+    cp.templateRow.lab = cp.templateRow.add("statictext", undefined, "输出模板:");
+    cp.templateRow.lab.preferredSize = [50, 20];
+    cp.templateRow.template = cp.templateRow.add("edittext", undefined, "OF_Cache_CineForm_RGBA16_Q4");
+    cp.templateRow.template.alignment = ["fill", "center"];
+    cp.templateRow.template.preferredSize = [200, 20];
+
+    cp.folderRow = cp.add("group");
+    cp.folderRow.orientation = "row";
+    cp.folderRow.alignment = ["fill", "top"];
+    cp.folderRow.spacing = 5;
+    cp.folderRow.lab = cp.folderRow.add("statictext", undefined, "缓存目录:");
+    cp.folderRow.lab.preferredSize = [40, 20];
+    cp.folderRow.path = cp.folderRow.add("statictext", undefined, "未设置");
+    cp.folderRow.path.alignment = ["fill", "center"];
+    cp.folderRow.path.preferredSize = [200, 20];
+    cp.folderRow.setBtn = cp.folderRow.add("button", undefined, "设置");
+    cp.folderRow.setBtn.preferredSize = [40, 20];
+
+    cp.listLabel = cp.add("statictext", undefined, "缓存列表（双击切换，按顺序执行）");
+    cp.listLabel.alignment = ["fill", "top"];
+    cp.listLabel.preferredSize = [300, 18];
+    cp.list = cp.add("listbox", undefined, undefined);
+    cp.list.alignment = ["fill", "top"];
+    cp.list.preferredSize = [300, 150];
+
+    cp.btnRow = cp.add("group");
+    cp.btnRow.orientation = "row";
+    cp.btnRow.alignment = ["fill", "top"];
+    cp.btnRow.spacing = 5;
+    cp.btnRow.moveUp = cp.btnRow.add("button", undefined, "↑");
+    cp.btnRow.moveUp.preferredSize = [45, 22];
+    cp.btnRow.moveDown = cp.btnRow.add("button", undefined, "↓");
+    cp.btnRow.moveDown.preferredSize = [50, 22];
+    cp.btnRow.removeItem = cp.btnRow.add("button", undefined, "删除");
+    cp.btnRow.removeItem.preferredSize = [60, 22];
+
+    cp.status = cp.add("statictext", undefined, "缓存列表为空");
+    cp.status.alignment = ["fill", "top"];
+    cp.status.preferredSize = [300, 20];
 
     // 缓存输出模块模板名可编辑并持久化
     cp.templateRow.template.text = OF_Tools_getCacheOutputModuleTemplate();
@@ -2289,16 +2405,19 @@ function UI(object,colorPanel){
         if(tab === 'tools'){
             tp.visible = true;
             cp.visible = false;
-            myPalette.grp.tabRow.tabTools.text = '● Tools';
-            myPalette.grp.tabRow.tabCache.text = 'Cache';
+            myPalette.grp.tabRow.tabTools.text = '● 工具';
+            myPalette.grp.tabRow.tabCache.text = '缓存';
         } else {
             tp.visible = false;
             cp.visible = true;
-            myPalette.grp.tabRow.tabTools.text = 'Tools';
-            myPalette.grp.tabRow.tabCache.text = '● Cache';
+            myPalette.grp.tabRow.tabTools.text = '工具';
+            myPalette.grp.tabRow.tabCache.text = '● 缓存';
         }
         myPalette.layout.layout(true);
         myPalette.layout.resize();
+        if(tab !== 'tools'){
+            try { cp.list.active = true; } catch(e){}
+        }
     }
     myPalette.grp.tabRow.tabTools.onClick = function(){ switchTab('tools'); };
     myPalette.grp.tabRow.tabCache.onClick = function(){ switchTab('cache'); };
@@ -2509,4 +2628,5 @@ function UI(object,colorPanel){
 // Bilibili ID：DDL水桶
 var colorPanels=[]
 UI(this,colorPanels);
+
 
