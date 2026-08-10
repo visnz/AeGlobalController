@@ -159,6 +159,8 @@ function UI(object,colorPanel){
     cp.folderRow.path.preferredSize = [200, 20];
     cp.folderRow.setBtn = cp.folderRow.add("button", undefined, "设置");
     cp.folderRow.setBtn.preferredSize = [40, 20];
+    cp.folderRow.openBtn = cp.folderRow.add("button", undefined, "打开");
+    cp.folderRow.openBtn.preferredSize = [40, 20];
 
     cp.listLabel = cp.add("statictext", undefined, "缓存列表（双击切换，按顺序执行）");
     cp.listLabel.alignment = ["fill", "top"];

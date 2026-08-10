@@ -64,16 +64,24 @@ function OF_Tools_extendOutTime30s(){
 }
 
 //============ 自动缓存工具 ==========//
+// 缓存队列持久化用的内部 marker comp：不是真正参与合成，只用它的 layer 顺序/enabled
+// 状态编码队列，靠这个名字识别，避免被当成普通合成误处理。
+var OF_TOOLS_CACHE_QUEUE_COMP_NAME = "_OF_CacheQueue";
+function OF_Tools_isCacheQueueDataComp(comp){
+    return !!comp && (comp instanceof CompItem) && comp.name === OF_TOOLS_CACHE_QUEUE_COMP_NAME;
+}
+
 function OF_Tools_getSelectedComps(){
     var comps = [];
-    if(app.project && app.project.activeItem && app.project.activeItem instanceof CompItem){
+    if(app.project && app.project.activeItem && app.project.activeItem instanceof CompItem
+        && !OF_Tools_isCacheQueueDataComp(app.project.activeItem)){
         comps.push(app.project.activeItem);
         return comps;
     }
     if(!app.project) return comps;
     for(var i = 1; i <= app.project.items.length; i++){
         var item = app.project.items[i];
-        if(item instanceof CompItem && item.selected){
+        if(item instanceof CompItem && item.selected && !OF_Tools_isCacheQueueDataComp(item)){
             comps.push(item);
         }
     }
@@ -147,6 +155,48 @@ function OF_Tools_getOrCreateCacheFolder(){
     return app.project.items.addFolder("Cache");
 }
 
+// 缓存队列持久化用的内部合成：只找不建（读取路径调用），找不到直接返回 null。
+function OF_Tools_findCacheQueueComp(){
+    if(!app.project) return null;
+    for(var i = 1; i <= app.project.items.length; i++){
+        var item = app.project.items[i];
+        if(OF_Tools_isCacheQueueDataComp(item)) return item;
+    }
+    return null;
+}
+
+// 顶层加一个警戒文字层，提醒这是 visnlink 插件用的内部数据，不要手动删除/改名/移动。
+// 每次保存都会整体重建这个合成的层，所以警戒层也要在重建时一起加回去。
+var OF_TOOLS_CACHE_QUEUE_WARNING_TEXT = "⚠ 该合成为 visnlink 插件 Cache 队列内部数据，请勿删除/重命名/移动";
+function OF_Tools_addCacheQueueWarningLayer(markerComp){
+    try {
+        var warningLayer = markerComp.layers.addText(OF_TOOLS_CACHE_QUEUE_WARNING_TEXT);
+        warningLayer.name = OF_TOOLS_CACHE_QUEUE_WARNING_TEXT;
+        try { warningLayer.locked = true; } catch(e){}
+        try { warningLayer.label = 2; } catch(e){}
+    } catch(e){
+        OF_Log("[CacheManager] 添加警戒层失败：" + e.toString());
+    }
+}
+
+function OF_Tools_getOrCreateCacheQueueComp(){
+    if(!app.project) return null;
+    var existing = OF_Tools_findCacheQueueComp();
+    var cacheFolder = OF_Tools_getOrCreateCacheFolder();
+    if(existing){
+        if(cacheFolder && existing.parentFolder !== cacheFolder){
+            try { existing.parentFolder = cacheFolder; } catch(e){}
+        }
+        return existing;
+    }
+    var markerComp = app.project.items.addComp(OF_TOOLS_CACHE_QUEUE_COMP_NAME, 4, 4, 1, 1 / 30, 30);
+    if(markerComp){
+        if(cacheFolder) markerComp.parentFolder = cacheFolder;
+        try { markerComp.comment = "OF Cache Tool internal data — do not rename, move, or delete."; } catch(e){}
+    }
+    return markerComp;
+}
+
 function OF_Tools_findOrCreatePrecomp(sourceComp, parentFolder){
     var preName = sourceComp.name + "_pre";
     for(var i = 1; i <= app.project.items.length; i++){
@@ -164,6 +214,7 @@ function OF_Tools_replaceParentSource(sourceComp, precomp){
         var item = app.project.items[i];
         if(!(item instanceof CompItem)) continue;
         if(item === precomp) continue;
+        if(OF_Tools_isCacheQueueDataComp(item)) continue;
         for(var j = 1; j <= item.numLayers; j++){
             var layer = item.layer(j);
             if(layer && layer.source && layer.source === sourceComp){
@@ -222,32 +273,66 @@ function OF_Tools_applyCineFormRGBA16(om){
     return false;
 }
 
-function OF_Tools_renderCompToMOV(comp, movPath){
-    OF_Log("[render] 开始加入渲染队列：" + comp.name + " -> " + movPath);
+// 只加入渲染队列并配置输出路径，不触发渲染。拆开是为了让批量缓存能把所有
+// 合成一次性都加进队列，再统一调用一次 render()（见 OF_Tools_renderQueueItemsBatch）。
+function OF_Tools_enqueueRenderItem(comp, movPath){
+    OF_Log("[render] 加入渲染队列：" + comp.name + " -> " + movPath);
     var rqItem = app.project.renderQueue.items.add(comp);
     var om = rqItem.outputModule(1);
     // 先套用模板，再设置输出路径，避免路径被模板重置
     if(!OF_Tools_applyCineFormRGBA16(om)){
         rqItem.remove();
         OF_Log("[render] 未找到模板，移除队列项");
-        return;
+        return null;
     }
     om.file = new File(movPath);
     OF_Log("[render] 已设置输出路径：" + movPath);
-    // 缓存操作需要在本次点击内完成渲染，之后才能立即导入 MOV。
-    // 这里使用 AE 的同步渲染接口；用户点击 Start Cache 后会看到 AE 进入渲染状态。
+    return rqItem;
+}
+
+// 一次性渲染传入的这批队列项。AE 的"文件已存在/该文件正被工程使用"确认框是跟着
+// render() 这次调用走的：把本轮要缓存的所有合成都先加入队列、再只调用一次 render()，
+// 弹窗会连续出现，用户可以连续点掉；如果像之前那样每个合成单独调一次 render()，
+// 每次调用都会各自触发一轮独立的确认框，没法一口气点完。
+// 队列里可能还残留用户自己手动加入/未清理的其它项，临时关闭它们，只渲染这一批，
+// 结束后恢复原状（不影响用户自己维护的渲染队列）。
+function OF_Tools_renderQueueItemsBatch(rqItems){
+    if(!rqItems.length) return;
+    var pausedItems = [];
+    var allItems = app.project.renderQueue.items;
+    for(var i = 1; i <= allItems.length; i++){
+        var qi = allItems[i];
+        var isOurs = false;
+        for(var j = 0; j < rqItems.length; j++){
+            if(rqItems[j] === qi){ isOurs = true; break; }
+        }
+        if(!isOurs && qi.render){
+            pausedItems.push(qi);
+            qi.render = false;
+        }
+    }
+    if(pausedItems.length){
+        OF_Log("[render] 临时跳过队列里其它 " + pausedItems.length + " 个已排队项");
+    }
+
+    OF_Log("[render] 开始批量渲染 " + rqItems.length + " 项，如有覆盖确认框请依次点掉");
+    var renderErr = null;
     try {
         app.project.renderQueue.render();
     } catch(e){
-        OF_Log("[render] 渲染失败：" + e.toString());
-        throw e;
+        renderErr = e;
     }
-    var renderedFile = new File(movPath);
-    if(!renderedFile.exists){
-        throw new Error("渲染结束但未找到输出文件：" + movPath);
+
+    for(var k = 0; k < pausedItems.length; k++){
+        try { pausedItems[k].render = true; } catch(e){}
     }
-    OF_Log("[render] 渲染完成：" + movPath);
-    return renderedFile;
+
+    if(renderErr){
+        // 不在这里 throw：批量渲染里某一项出错或被用户中途 Stop，不代表其它项也失败，
+        // 每一项各自的成败交给调用方按 rqItem.status 逐个判断。
+        OF_Log("[render] 批量渲染过程中出现异常（可能是部分项被中止）：" + renderErr.toString());
+    }
+    OF_Log("[render] 批量渲染调用结束");
 }
 
 function OF_Tools_importAndPlaceMOV(precomp, movPath, sourceComp){
@@ -299,6 +384,24 @@ function OF_Tools_importAndPlaceMOV(precomp, movPath, sourceComp){
     }
 }
 
+// 摘除工程里所有指向 movPath 的素材项（FootageItem），为重新渲染同一路径让路。
+// 用文件的 fsName 精确匹配，而不是名字，避免误删同名但不同路径的素材。
+function OF_Tools_removeExistingCacheFootage(movPath){
+    if(!app.project) return;
+    var target = new File(movPath);
+    for(var i = app.project.items.length; i >= 1; i--){
+        var item = app.project.items[i];
+        if(item instanceof FootageItem && item.file){
+            try {
+                if(item.file.fsName === target.fsName){
+                    OF_Log("[cacheOne] 移除旧缓存素材项：" + item.name);
+                    item.remove();
+                }
+            } catch(e){}
+        }
+    }
+}
+
 function OF_Tools_sanitizeCacheName(name){
     var result = name || "Untitled";
     try { result = decodeURI(result); } catch(e){}
@@ -314,7 +417,9 @@ function OF_Tools_getProjectNameForCache(){
     return "Untitled";
 }
 
-function OF_Tools_cacheOneComp(targetComp, cacheFolderPath){
+// 缓存流程第一阶段：建/找 precomp、替换引用、把旧缓存素材/文件挪开，只算好输出
+// 路径，不做渲染。渲染统一挪到 OF_Tools_cacheCompList 里一次性批量处理。
+function OF_Tools_prepCacheEntry(targetComp, cacheFolderPath){
     OF_Log("[cacheOne] 开始处理：" + (targetComp ? targetComp.name : "null"));
     if(!targetComp || !(targetComp instanceof CompItem)){
         throw new Error("目标不是有效合成");
@@ -325,13 +430,6 @@ function OF_Tools_cacheOneComp(targetComp, cacheFolderPath){
     }
     OF_Log("[cacheOne] 源合成：" + sourceComp.name);
 
-    var cacheProjFolder = OF_Tools_getOrCreateCacheFolder();
-    var precomp = OF_Tools_findOrCreatePrecomp(sourceComp, cacheProjFolder);
-    OF_Log("[cacheOne] precomp：" + precomp.name);
-
-    OF_Tools_replaceParentSource(sourceComp, precomp);
-    OF_Tools_ensurePrecompLayers(precomp, sourceComp);
-
     var projectName = OF_Tools_getProjectNameForCache();
     var cacheRootFolder = new Folder(cacheFolderPath);
     if(!cacheRootFolder.exists) cacheRootFolder.create();
@@ -341,37 +439,157 @@ function OF_Tools_cacheOneComp(targetComp, cacheFolderPath){
     var movPath = cacheDirFolder.fsName + "/" + OF_Tools_sanitizeCacheName(sourceComp.name) + "_cache.mov";
     OF_Log("[cacheOne] 缓存路径：" + movPath);
 
-    var rendered = false;
+    // 准备阶段（建 precomp / 替换引用）单独开合一个 undo group，不要让它跨越
+    // 后面的 renderQueue.render()：渲染是同步且不可撤销的操作，如果 undo group
+    // 横跨渲染调用，AE 会报 "Undo group mismatch, will attempt to fix"。
+    var precomp;
+    app.beginUndoGroup("Auto Cache Prep: " + sourceComp.name);
     try {
-        rendered = !!OF_Tools_renderCompToMOV(sourceComp, movPath);
-    } catch(e){
-        OF_Log("[cacheOne] 渲染异常，启用原合成 fallback：" + e.toString());
+        var cacheProjFolder = OF_Tools_getOrCreateCacheFolder();
+        precomp = OF_Tools_findOrCreatePrecomp(sourceComp, cacheProjFolder);
+        OF_Log("[cacheOne] precomp：" + precomp.name);
+        OF_Tools_replaceParentSource(sourceComp, precomp);
+        OF_Tools_ensurePrecompLayers(precomp, sourceComp);
+        // 重复缓存同一个合成时，工程里还留着上一次导入的同路径素材项。
+        // 渲染前把它从工程里摘掉，否则 AE 发现输出路径"正被工程内某素材占用"，
+        // 会弹出确认覆盖的对话框。
+        OF_Tools_removeExistingCacheFootage(movPath);
+    } finally {
+        app.endUndoGroup();
     }
 
-    if(rendered){
-        OF_Log("[cacheOne] MOV 已生成，立即导入并替换");
-        OF_Tools_importAndPlaceMOV(precomp, movPath, sourceComp);
-    } else {
-        OF_Log("[cacheOne] MOV 尚未生成，启用原合成作为 fallback");
-        var sourceLayer = null;
-        for(var i = 1; i <= precomp.numLayers; i++){
-            var layer = precomp.layer(i);
-            if(layer && layer.source && layer.source === sourceComp){
-                sourceLayer = layer;
-                break;
+    // 素材项摘掉了，但磁盘上的旧文件还在；同名文件仍然存在的话 AE 还是会弹"文件已存在，是否覆盖"。
+    // 这里不直接删掉旧文件，而是先改名备份成 .bak：如果本次渲染失败，旧缓存不会丢；
+    // 只有等新文件成功渲染并导入之后，才真正删掉这个备份（见 OF_Tools_importCacheEntry）。
+    // 上一步刚把引用它的 FootageItem 从工程里摘除，但 AE 内部是否已经释放文件句柄不确定，
+    // 如果改名失败（很可能是文件被占用），退回直接删除；两者都失败就保留旧文件，
+    // 后果只是这一次 render() 时 AE 会弹出覆盖确认框，不影响正确性。
+    var bakName = OF_Tools_sanitizeCacheName(sourceComp.name) + "_cache.mov.bak";
+    var bakPath = cacheDirFolder.fsName + "/" + bakName;
+    var hasBak = false;
+    try {
+        var staleFile = new File(movPath);
+        if(staleFile.exists){
+            var oldBak = new File(bakPath);
+            if(oldBak.exists){
+                try { oldBak.remove(); } catch(e){}
+            }
+            if(staleFile.rename(bakName)){
+                hasBak = true;
+                OF_Log("[cacheOne] 旧缓存文件已备份为：" + bakName);
+            } else {
+                OF_Log("[cacheOne] 旧缓存文件改名备份失败，尝试直接删除：" + movPath);
+                try { staleFile.remove(); } catch(e2){ OF_Log("[cacheOne] 删除旧缓存文件也失败（可能被占用）：" + e2.toString()); }
             }
         }
-        if(sourceLayer){
-            try { sourceLayer.enabled = true; } catch(e){}
+    } catch(e){ OF_Log("[cacheOne] 处理旧缓存文件异常：" + e.toString()); }
+
+    return {
+        sourceComp: sourceComp,
+        precomp: precomp,
+        movPath: movPath,
+        bakPath: bakPath,
+        hasBak: hasBak,
+        rqItem: null
+    };
+}
+
+// 缓存流程第二阶段：根据渲染结果导入 MOV 并切层，或者渲染失败时启用原合成 fallback
+// 并还原备份。entry 来自 OF_Tools_prepCacheEntry，rendered 由调用方按渲染队列项的
+// 最终状态判断好后传入。
+function OF_Tools_importCacheEntry(entry, rendered){
+    var sourceComp = entry.sourceComp;
+    var precomp = entry.precomp;
+    var movPath = entry.movPath;
+    app.beginUndoGroup("Auto Cache Import: " + sourceComp.name);
+    try {
+        if(rendered){
+            OF_Log("[cacheOne] MOV 已生成，立即导入并替换：" + sourceComp.name);
+            OF_Tools_importAndPlaceMOV(precomp, movPath, sourceComp);
+            // 新缓存已经成功导入，旧的 .bak 备份可以删掉了。
+            if(entry.hasBak){
+                try {
+                    var bakFile = new File(entry.bakPath);
+                    if(bakFile.exists) bakFile.remove();
+                } catch(e){ OF_Log("[cacheOne] 删除旧缓存备份失败：" + e.toString()); }
+            }
+        } else {
+            OF_Log("[cacheOne] MOV 尚未生成，启用原合成作为 fallback：" + sourceComp.name);
+            // 本次渲染失败：把之前改名保留的旧缓存文件还原回去，避免丢失上一轮的缓存。
+            if(entry.hasBak){
+                try {
+                    var bakFileRestore = new File(entry.bakPath);
+                    if(bakFileRestore.exists && bakFileRestore.rename(OF_Tools_sanitizeCacheName(sourceComp.name) + "_cache.mov")){
+                        OF_Log("[cacheOne] 渲染失败，已还原旧缓存文件：" + sourceComp.name);
+                    }
+                } catch(e){ OF_Log("[cacheOne] 还原旧缓存备份失败：" + e.toString()); }
+            }
+            var sourceLayer = null;
+            for(var i = 1; i <= precomp.numLayers; i++){
+                var layer = precomp.layer(i);
+                if(layer && layer.source && layer.source === sourceComp){
+                    sourceLayer = layer;
+                    break;
+                }
+            }
+            if(sourceLayer){
+                try { sourceLayer.enabled = true; } catch(e){}
+            }
         }
+    } finally {
+        app.endUndoGroup();
     }
     OF_Log("[cacheOne] 完成：" + sourceComp.name);
 }
 
 function OF_Tools_cacheCompList(comps, cacheFolderPath){
-    OF_Log("[cacheList] 批量缓存 " + comps.length + " 个合成");
+    OF_Log("[cacheList] 批量缓存 " + comps.length + " 个合成，准备阶段（建 precomp / 备份旧文件）...");
+    var entries = [];
     for(var i = 0; i < comps.length; i++){
-        OF_Tools_cacheOneComp(comps[i], cacheFolderPath);
+        try {
+            entries.push(OF_Tools_prepCacheEntry(comps[i], cacheFolderPath));
+        } catch(e){
+            OF_Log("[cacheList] 准备失败，跳过 " + (comps[i] ? comps[i].name : "?") + "：" + e.toString());
+        }
+    }
+    if(!entries.length){
+        OF_Log("[cacheList] 没有可渲染的合成，结束");
+        return;
+    }
+
+    // 把这一批全部一次性加进渲染队列，再统一调用一次 render()：这样如果 AE 弹出
+    // 覆盖确认框，会在这一次调用里连续出现，用户可以一口气点掉，而不是每个合成
+    // 各自单独触发一轮"脚本调 render() -> 弹窗 -> 等确认"。
+    OF_Log("[cacheList] 准备完成，一次性加入渲染队列 " + entries.length + " 项并开始渲染");
+    for(var j = 0; j < entries.length; j++){
+        try {
+            entries[j].rqItem = OF_Tools_enqueueRenderItem(entries[j].sourceComp, entries[j].movPath);
+        } catch(e){
+            OF_Log("[cacheList] 加入渲染队列失败：" + entries[j].sourceComp.name + " -> " + e.toString());
+        }
+    }
+    var queuedRqItems = [];
+    for(var k = 0; k < entries.length; k++){
+        if(entries[k].rqItem) queuedRqItems.push(entries[k].rqItem);
+    }
+    OF_Tools_renderQueueItemsBatch(queuedRqItems);
+
+    OF_Log("[cacheList] 渲染阶段结束，开始逐项导入");
+    for(var m = 0; m < entries.length; m++){
+        var entry = entries[m];
+        var rendered = false;
+        if(entry.rqItem){
+            try { rendered = (entry.rqItem.status === RQItemStatus.DONE); } catch(e){}
+            try { entry.rqItem.remove(); } catch(e){}
+        }
+        if(rendered){
+            try { rendered = new File(entry.movPath).exists; } catch(e){ rendered = false; }
+        }
+        try {
+            OF_Tools_importCacheEntry(entry, rendered);
+        } catch(e){
+            OF_Log("[cacheList] 导入阶段异常：" + entry.sourceComp.name + " -> " + e.toString());
+        }
     }
     OF_Log("[cacheList] 全部缓存完成");
 }
@@ -392,6 +610,85 @@ function OF_Tools_promptAndSaveCacheFolder(){
     return f.fsName;
 }
 
+function OF_Tools_openCacheFolder(){
+    var cachePath = OF_Tools_getCacheFolderPath();
+    if(!cachePath){
+        alert("请先点击 设置 指定缓存根目录");
+        return;
+    }
+    // 优先直达当前工程实际写入缓存文件的子目录，不存在（还没缓存过）则回退到根目录。
+    var projectCacheDir = new Folder(cachePath + "/" + OF_Tools_getProjectNameForCache() + "/Cache");
+    var target = projectCacheDir.exists ? projectCacheDir : new Folder(cachePath);
+    if(!target.exists){
+        alert("目录不存在：" + target.fsName);
+        return;
+    }
+    target.execute();
+}
+
+// entry.comp 可能是已经从工程里删除的 Item：删除后原引用仍然是个对象，
+// 但访问它的属性会抛异常，用这个判断代替直接判空。
+function OF_Tools_isCompValid(comp){
+    if(!comp) return false;
+    try {
+        var _ = comp.id;
+        return comp instanceof CompItem;
+    } catch(e){
+        return false;
+    }
+}
+
+// 缓存队列现在直接存成工程内嵌的 marker comp（见上面 OF_Tools_getOrCreateCacheQueueComp），
+// 不再依赖 app.settings：跨工程路径变化、跨会话都靠原生 Save/Open 保证，不用自己维护
+// key/序列化格式。
+function OF_Tools_saveCacheQueueForProject(cacheItems){
+    if(!app.project) return;
+    app.beginUndoGroup("Update Cache Queue");
+    try {
+        var markerComp = OF_Tools_getOrCreateCacheQueueComp();
+        if(!markerComp){
+            OF_Log("[CacheManager] 无法创建缓存队列数据合成，保存失败");
+            return;
+        }
+        for(var i = markerComp.numLayers; i >= 1; i--){
+            try { markerComp.layer(i).remove(); } catch(e){}
+        }
+        // layers.add() 每次都插到最顶层，倒序添加才能让最终顶到底的顺序
+        // 与 cacheItems 数组从前到后的顺序一致。
+        for(var j = cacheItems.length - 1; j >= 0; j--){
+            var entry = cacheItems[j];
+            if(!OF_Tools_isCompValid(entry.comp)) continue;
+            var layer = markerComp.layers.add(entry.comp);
+            try { layer.enabled = !!entry.enabled; } catch(e){}
+        }
+        // 最后加警戒层，让它落在最顶层。
+        OF_Tools_addCacheQueueWarningLayer(markerComp);
+        OF_Log("[CacheManager] 保存缓存队列 " + cacheItems.length + " 项到 " + markerComp.name);
+    } catch(e){
+        OF_Log("[CacheManager] 保存缓存队列失败：" + e.toString());
+    } finally {
+        app.endUndoGroup();
+    }
+}
+
+function OF_Tools_loadCacheQueueForProject(){
+    var result = [];
+    var markerComp = OF_Tools_findCacheQueueComp();
+    if(!markerComp) return result;
+    for(var j = 1; j <= markerComp.numLayers; j++){
+        try {
+            var layer = markerComp.layer(j);
+            if(!layer) continue;
+            var source = layer.source;
+            // 警戒文字层没有 .source（不是合成引用），isCompValid 会自然把它过滤掉。
+            if(!OF_Tools_isCompValid(source)) continue;
+            result.push({comp: source, enabled: !!layer.enabled});
+        } catch(e){}
+    }
+    OF_Log("[CacheManager] 从缓存队列数据合成读取 " + result.length + " 项");
+    return result;
+}
+
 function OF_Tools_initCachePanel(panel){
     OF_Log("[CacheManager] 初始化 Cache Panel（手动列表模式）");
     if(!app.project){
@@ -404,7 +701,13 @@ function OF_Tools_initCachePanel(panel){
     OF_Log("[CacheManager] 缓存目录：" + cachePath);
     // Cache 页面现在是用户手动维护的扁平列表：不再自动扫描依赖树。
     // 每一项保存真实的 CompItem 引用、启用状态和用户调整后的顺序。
-    var cacheItems = [];
+    // 列表跟随工程文件持久化（见 OF_Tools_saveCacheQueueForProject），重开工程后会自动恢复。
+    var cacheItems = OF_Tools_loadCacheQueueForProject();
+    OF_Log("[CacheManager] 从工程配置恢复缓存队列 " + cacheItems.length + " 项");
+
+    function persist(){
+        OF_Tools_saveCacheQueueForProject(cacheItems);
+    }
 
     function getListItemText(index){
         var entry = cacheItems[index];
@@ -435,6 +738,7 @@ function OF_Tools_initCachePanel(panel){
         if(panel.list.items[idx]) panel.list.items[idx].text = getListItemText(idx);
         panel.list.selection = panel.list.items[idx];
         try { panel.list.active = true; } catch(e){}
+        persist();
     };
 
     panel.actionRow.addComp.onClick = function(){
@@ -456,6 +760,7 @@ function OF_Tools_initCachePanel(panel){
         }
         OF_Log("[CacheManager] 添加合成 " + added + " 个");
         refreshList(cacheItems.length - 1);
+        persist();
     };
 
     panel.folderRow.setBtn.onClick = function(){
@@ -467,10 +772,26 @@ function OF_Tools_initCachePanel(panel){
         }
     };
 
+    panel.folderRow.openBtn.onClick = function(){
+        OF_Tools_openCacheFolder();
+    };
+
     panel.actionRow.refresh.onClick = function(){
-        // Refresh 只重新读取缓存目录和项目中的 _pre 状态，不改变用户列表和顺序。
+        // Refresh：重新读取缓存目录、项目中的 _pre 状态，并清掉已经在工程里被删除的合成条目
+        // （按 id 校验而不是 name，因为工程里可能存在同名的不同合成）。
         cachePath = OF_Tools_getCacheFolderPath() || cachePath;
         panel.folderRow.path.text = cachePath ? cachePath : "未设置";
+        var removed = 0;
+        for(var i = cacheItems.length - 1; i >= 0; i--){
+            if(!OF_Tools_isCompValid(cacheItems[i].comp)){
+                cacheItems.splice(i, 1);
+                removed++;
+            }
+        }
+        if(removed){
+            OF_Log("[CacheManager] Refresh 清除失效条目 " + removed + " 个");
+            persist();
+        }
         refreshList(panel.list.selection ? panel.list.selection.index : -1);
     };
 
@@ -481,6 +802,7 @@ function OF_Tools_initCachePanel(panel){
         cacheItems[idx - 1] = cacheItems[idx];
         cacheItems[idx] = tmp;
         refreshList(idx - 1);
+        persist();
     };
 
     panel.btnRow.moveDown.onClick = function(){
@@ -490,6 +812,7 @@ function OF_Tools_initCachePanel(panel){
         cacheItems[idx + 1] = cacheItems[idx];
         cacheItems[idx] = tmp;
         refreshList(idx + 1);
+        persist();
     };
 
     panel.btnRow.removeItem.onClick = function(){
@@ -497,6 +820,7 @@ function OF_Tools_initCachePanel(panel){
         if(idx < 0) return;
         cacheItems.splice(idx, 1);
         refreshList(Math.min(idx, cacheItems.length - 1));
+        persist();
     };
 
     panel.actionRow.cacheAll.onClick = function(){
@@ -518,7 +842,11 @@ function OF_Tools_initCachePanel(panel){
             OF_Log("[CacheManager] 按列表顺序开始缓存（渲染并立即导入）");
             panel.status.text = "正在渲染并导入...";
 
-            app.beginUndoGroup("Auto Cache");
+            // 注意：这里不整体包一个 undo group。每个合成自己的编辑操作已经在
+            // OF_Tools_prepCacheEntry / OF_Tools_importCacheEntry 内部分段开合 undo
+            // group，且都不跨越 render()；如果外层再包一层横跨多个合成的渲染循环，
+            // 同样会触发 Undo group mismatch。OF_Tools_cacheCompList 内部会把这一批
+            // 合成的渲染统一合并成一次 render() 调用，让覆盖确认框能连续点掉。
             try {
                 OF_Tools_cacheCompList(toCache, cachePath);
                 panel.status.text = "Cache complete";
@@ -527,8 +855,8 @@ function OF_Tools_initCachePanel(panel){
                 alert("缓存出错：\n" + e.toString());
                 panel.status.text = "Error";
             }
-            app.endUndoGroup();
             refreshList();
+            persist();
         } catch(e) {
             OF_Log("[CacheManager] 回调异常：" + e.toString());
             alert("Cache Selected 回调异常：\n" + e.toString());
