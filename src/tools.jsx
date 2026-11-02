@@ -167,11 +167,12 @@ function OF_Tools_findCacheQueueComp(){
 
 // 顶层加一个警戒文字层，提醒这是 visnlink 插件用的内部数据，不要手动删除/改名/移动。
 // 每次保存都会整体重建这个合成的层，所以警戒层也要在重建时一起加回去。
-var OF_TOOLS_CACHE_QUEUE_WARNING_TEXT = "⚠ 该合成为 visnlink 插件 Cache 队列内部数据，请勿删除/重命名/移动";
+var OF_TOOLS_CACHE_QUEUE_WARNING_TEXT = "⚠ visnlink Cache 队列数据\r请勿删除/改名/移动";
+var OF_TOOLS_CACHE_QUEUE_WARNING_NAME = "⚠ 请勿删除 - Cache 队列数据";
 function OF_Tools_addCacheQueueWarningLayer(markerComp){
     try {
         var warningLayer = markerComp.layers.addText(OF_TOOLS_CACHE_QUEUE_WARNING_TEXT);
-        warningLayer.name = OF_TOOLS_CACHE_QUEUE_WARNING_TEXT;
+        warningLayer.name = OF_TOOLS_CACHE_QUEUE_WARNING_NAME;
         try { warningLayer.locked = true; } catch(e){}
         try { warningLayer.label = 2; } catch(e){}
     } catch(e){
@@ -651,7 +652,13 @@ function OF_Tools_saveCacheQueueForProject(cacheItems){
             return;
         }
         for(var i = markerComp.numLayers; i >= 1; i--){
-            try { markerComp.layer(i).remove(); } catch(e){}
+            try {
+                var oldLayer = markerComp.layer(i);
+                // 警戒层是 locked 的，locked 状态下 remove() 可能直接失败——
+                // 删之前先解锁，否则旧警戒层会一直留着，每次保存都多加一条新的。
+                try { oldLayer.locked = false; } catch(e2){}
+                oldLayer.remove();
+            } catch(e){}
         }
         // layers.add() 每次都插到最顶层，倒序添加才能让最终顶到底的顺序
         // 与 cacheItems 数组从前到后的顺序一致。
@@ -734,10 +741,9 @@ function OF_Tools_initCachePanel(panel){
         var idx = panel.list.selection ? panel.list.selection.index : -1;
         if(idx < 0) return;
         cacheItems[idx].enabled = !cacheItems[idx].enabled;
-        // 原地更新文字，避免 removeAll/add 让焦点跳到其它按钮。
-        if(panel.list.items[idx]) panel.list.items[idx].text = getListItemText(idx);
-        panel.list.selection = panel.list.items[idx];
-        try { panel.list.active = true; } catch(e){}
+        // 直接改 ListItem.text 在这个宿主上不会立刻重绘（要等下一次无关的焦点切换才刷新），
+        // 改用跟其它按钮一致的 refreshList，靠 removeAll/add 强制重绘。
+        refreshList(idx);
         persist();
     };
 
