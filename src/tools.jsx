@@ -63,6 +63,80 @@ function OF_Tools_extendOutTime30s(){
     }
 }
 
+// 把选中图层（含预合成内部，递归）的混合模式 Linear Dodge 改成 Add。
+// 入口是当前合成窗口里选中的图层，不是 Project 面板的选中项。
+function OF_Tools_linearDodgeToAdd(){
+    if(!app.project || !app.project.activeItem) return;
+    var comp = app.project.activeItem;
+    if(!(comp instanceof CompItem)) return;
+    if(!comp.selectedLayers || comp.selectedLayers.length === 0){
+        OF_Log("[Blend] 当前合成没有选中图层，请先在时间线里选中要处理的对象");
+        return;
+    }
+
+    // AE 的混合模式枚举名不稳定（BlendingMode.LINEARDODGE 在 AE 2024 里是 undefined），
+    // 直接用实测数值：NORMAL=5212 ADD=5220 SCREEN=5222 Linear Dodge=5223
+    var BM_ADD = 5220;          // Add（相加）
+    var BM_LINEAR_DODGE = 5223; // Linear Dodge（线性减淡）
+
+    OF_Log("[Blend] ==== 开始：合成[" + comp.name + "] 选中 " + comp.selectedLayers.length + " 个图层 ====");
+    OF_Log("[Blend] 目标：Linear Dodge=" + BM_LINEAR_DODGE + " → Add=" + BM_ADD);
+
+    app.beginUndoGroup("Linear Dodge → Add");
+    var visited = {};
+    var changed = 0;
+    var scanned = 0;      // 扫描过的图层总数
+    var compEntered = 0;  // 进入过的预合成总数
+    var selected = comp.selectedLayers;  // 缓存，递归进入预合成时 selectedLayers 可能变化
+    for(var i = 0; i < selected.length; i++){
+        processLayerRecursive(selected[i], visited);
+    }
+    app.endUndoGroup();
+    OF_Log("[Blend] ==== 结束：扫描图层 " + scanned + " 个，命中修改 " + changed + " 个，进入预合成 " + compEntered + " 个 ====");
+
+    function processLayerRecursive(layer, visited){
+        if(!layer) return;
+        scanned++;
+        try {
+            var bm = layer.blendingMode;
+            var srcDesc = "";
+            if(layer.source && layer.source instanceof CompItem){
+                srcDesc = "预合成[" + layer.source.name + "]";
+            } else if(layer.source){
+                srcDesc = "素材源";
+            } else {
+                srcDesc = "无源(纯色/文本等)";
+            }
+            OF_Log("[Blend] 扫描#" + scanned + " [" + layer.name + "] 源=" + srcDesc
+                + " blendingMode=" + bm
+                + " 命中LD=" + (bm == BM_LINEAR_DODGE));
+            if(bm == BM_LINEAR_DODGE){
+                layer.blendingMode = BM_ADD;
+                changed++;
+                OF_Log("[Blend]    → 已修改 [" + layer.name + "] Linear Dodge → Add");
+            }
+        } catch(e){
+            OF_Log("[Blend] 扫描#" + scanned + " [" + layer.name + "] 读取blendingMode异常: " + e);
+        }
+        if(layer.source && layer.source instanceof CompItem){
+            processCompRecursive(layer.source, visited);
+        }
+    }
+    function processCompRecursive(c, visited){
+        if(!c || !(c instanceof CompItem)) return;
+        if(visited[c.id]){
+            OF_Log("[Blend]    → 预合成 [" + c.name + "] 已处理过，跳过（防循环引用）");
+            return;
+        }
+        visited[c.id] = true;
+        compEntered++;
+        OF_Log("[Blend]    → 进入预合成 [" + c.name + "]，共 " + c.numLayers + " 层");
+        for(var j = 1; j <= c.numLayers; j++){
+            processLayerRecursive(c.layer(j), visited);
+        }
+    }
+}
+
 //============ 自动缓存工具 ==========//
 // 缓存队列持久化用的内部 marker comp：不是真正参与合成，只用它的 layer 顺序/enabled
 // 状态编码队列，靠这个名字识别，避免被当成普通合成误处理。

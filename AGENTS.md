@@ -61,6 +61,10 @@ UI 面板里聚合脚本靠 `eval("aggr_"+text.split("..")[1])` 派发，所以�
   `devtools/jsxbin2jsx/jsxbin_to_jsx.exe` 还原成明文，改完按需再编译回 JSXBIN。
 - **注释风格**：从别处集成的脚本，原作者的口语化中文注释可以保留，不必「润色」；修 bug 和
   结构调整分开提交会更清爽，但都看你。
+- **调试日志**：脚本跑在 AE 宿主里，没有常规 debugger/断点，面板里的 Log 是唯一能观察运行
+  状态的地方。排查问题时用 `OF_Log()` 输出尽可能详细的日志（中间变量值、枚举值、分支命中、
+  递归进入/跳过、最终统计等），对照面板行为才能快速定位。定位后精简或移除调试日志，保留关键
+  统计即可。
 
 ## 如何新增功能（参考流程）
 
@@ -81,12 +85,26 @@ UI 面板里聚合脚本靠 `eval("aggr_"+text.split("..")[1])` 派发，所以�
 
 文件名建议：`开发计划/<主题>报告-YYYYMMDD.md`。这样后面回看或回滚时能找到当时的决策依据。
 
+## 开发环境与热重载
+
+- 主力开发环境：**AE 2024**，`ScriptUI Panels` 目录为
+  `C:\Program Files\Adobe\Adobe After Effects 2024\Support Files\Scripts\ScriptUI Panels`
+  （机器上还装了 AE 2020，目录结构相同，日常开发以 2024 为准）。
+- 本插件默认的「热重载」方式：脚本文件名固定为 `visnlink.jsx`，AE 每次从 `窗口` 菜单
+  打开面板时都会重新从磁盘读取该文件内容，所以日常迭代流程是：
+  1. 改 `src/` 代码；
+  2. `bash ./build.sh` 生成新的 `visnlink.jsx`；
+  3. 把 `visnlink.jsx` 复制到上面的 `ScriptUI Panels` 目录（覆盖旧文件）；
+  4. 在 AE 里**关掉面板**（点面板右上角 ×），再从 `窗口` 菜单底部**重新打开**即可加载新代码，
+     **不需要重启整个 AE**。
+- 只有**首次部署**（第一次把 `visnlink.jsx` 放进目录）或**改了脚本文件名**时才需要重启 AE，
+  让 `窗口` 菜单重新扫描注册；文件名不变的情况下日常迭代都走上面的热重载。
+
 ## 构建与部署
 
 - 构建：`bash ./build.sh`（或 `sh build.sh`），生成根目录 `visnlink.jsx`。
-- 部署：把 `visnlink.jsx` 复制到 AE 的 `ScriptUI Panels` 目录（如
-  `C:\Program Files\Adobe\Adobe After Effects CC 2015.3\Support Files\Scripts\ScriptUI Panels`），
-  重启 AE 后在 `窗口` 菜单底部打开。
+- 部署：把 `visnlink.jsx` 复制到 AE 的 `ScriptUI Panels` 目录（见上面「开发环境与热重载」），
+  首次部署重启 AE 后在 `窗口` 菜单底部打开，之后日常迭代走热重载。
 - 没有单元测试/类型检查体系——本脚本跑在 AE 宿主运行时里，验证靠在 AE 内实测面板各项功能。
 
 ## 已知问题 / TODO

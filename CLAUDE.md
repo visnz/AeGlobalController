@@ -16,7 +16,7 @@ After Effects 的 ScriptUI Panel 脚本（作者自用集成工具箱），纯 J
 
 **改完 `src/` 下任何文件后必须重新跑一遍 `build.sh`**——`visnlink.jsx` 是构建产物，手改它会在下次构建时被覆盖，不要直接编辑。
 
-部署：把构建出的 `visnlink.jsx` 复制到 AE 的 `ScriptUI Panels` 目录（如 `...\Adobe After Effects .../Support Files/Scripts/ScriptUI Panels`），重启 AE 后在「窗口」菜单底部打开面板测试。
+部署：把构建出的 `visnlink.jsx` 复制到 AE 的 `ScriptUI Panels` 目录（主力开发环境为 AE 2024，目录是 `C:\Program Files\Adobe\Adobe After Effects 2024\Support Files\Scripts\ScriptUI Panels`）。本插件默认走「热重载」：脚本文件名固定为 `visnlink.jsx`，AE 每次从「窗口」菜单打开面板时都会重新从磁盘读取该文件，所以改完代码 + `build.sh` + 复制覆盖后，只需在 AE 里**关掉面板再从「窗口」菜单重新打开**即可生效，**无需重启 AE**。只有首次部署（把文件第一次放进目录）或改了脚本文件名时才需要重启 AE 让菜单重新扫描注册。
 
 ## 架构
 
@@ -65,6 +65,10 @@ eval("aggr_" + text.split("..")[1])
 ### 跨 AE 版本防御
 
 不同 AE 版本 API 有差异，访问图层/特效属性前先判空（参考 `motion2.jsx` 里各函数开头的写法），常用判空点：`app.project.activeItem`、`selectedLayers`、`canVaryOverTime`。
+
+### 调试日志
+
+脚本跑在 AE 宿主里，没有常规 debugger/断点，面板里的 Log 是唯一能观察运行状态的地方。排查问题时用 `OF_Log()` 输出尽可能详细的日志（中间变量值、枚举值、分支命中、递归进入/跳过、最终统计等），对照面板行为才能快速定位。定位后精简或移除调试日志，保留关键统计即可。
 
 ### `devtools/jsxbin2jsx/`
 
