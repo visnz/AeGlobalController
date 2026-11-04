@@ -46,7 +46,8 @@ function UI(object,colorPanel){
                         "textme: StaticText {text:'batch'},"+
                         "mb: Button { text:'MB', preferredSize:[30,25] }, "+
                         "ext: Button { text:'+30s', preferredSize:[35,25] }, "+
-                        "lda: Button { text:'LD→A', preferredSize:[40,25] }"+
+                        "lda: Button { text:'LD→A', preferredSize:[40,25] }, "+
+                        "half: Button { text:'50%', preferredSize:[35,25] }"+
                     "},"+
                     "line3: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
                         "line4: Group {text:'功能', alignment:['fill','top'], orientation:'column', spacing:0 ,"+
@@ -307,6 +308,7 @@ function UI(object,colorPanel){
     tp.outsideGroup.line1.lineB.line2.mb.onClick=OF_Tools_enableMotionBlur
     tp.outsideGroup.line1.lineB.line2.ext.onClick=OF_Tools_extendOutTime30s
     tp.outsideGroup.line1.lineB.line2.lda.onClick=OF_Tools_linearDodgeToAdd
+    tp.outsideGroup.line1.lineB.line2.half.onClick=OF_Tools_makeHalfSizeComps
 
     // log面板
     myPalette.grp.logGroup.logToggle.onClick=function(){

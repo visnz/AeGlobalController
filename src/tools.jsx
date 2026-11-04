@@ -137,6 +137,74 @@ function OF_Tools_linearDodgeToAdd(){
     }
 }
 
+// 为选中的每个合成生成一个 50% 缩放的预览合成：
+// 新建合成（尺寸 = 原尺寸 / 2），把原合成作为图层放入并缩放 50%。
+// 用于渲染一整套选中集合的 50% 大小预览视频。
+function OF_Tools_makeHalfSizeComps(){
+    if(!app.project) return;
+    var comps = OF_Tools_getProjectSelectedComps();
+    if(!comps || comps.length === 0){
+        OF_Log("[HalfSize] 没有选中任何合成，请在 Project 面板选中要缩放的合成");
+        return;
+    }
+
+    app.beginUndoGroup("Make 50% Comps");
+    var created = 0;
+    var newComps = [];
+    for(var i = 0; i < comps.length; i++){
+        var src = comps[i];
+        try {
+            if(!(src instanceof CompItem)) continue;
+            var halfW = Math.round(src.width / 2);
+            var halfH = Math.round(src.height / 2);
+            var newName = src.name + "_50%";
+            var newComp = app.project.items.addComp(newName, halfW, halfH, src.pixelAspect, src.duration, src.frameRate);
+            if(!newComp){
+                OF_Log("[HalfSize] 创建 [" + newName + "] 失败");
+                continue;
+            }
+            if(src.parentFolder) newComp.parentFolder = src.parentFolder;
+            var layer = newComp.layers.add(src);
+            if(layer){
+                layer.scale.setValue([50, 50]);
+            }
+            newComps.push(newComp);
+            created++;
+            OF_Log("[HalfSize] 已生成 [" + newName + "] " + halfW + "x" + halfH + "（原 " + src.width + "x" + src.height + "）");
+        } catch(e){
+            OF_Log("[HalfSize] 处理 [" + (src ? src.name : "null") + "] 失败：" + e);
+        }
+    }
+    app.endUndoGroup();
+
+    // 生成完成后：取消原合成的选中，改选刚生成的 50% 合成，方便直接 Ctrl+M 渲染。
+    for(var m = 0; m < comps.length; m++){
+        try { comps[m].selected = false; } catch(e){}
+    }
+    for(var k = 0; k < newComps.length; k++){
+        try { newComps[k].selected = true; } catch(e){}
+    }
+
+    OF_Log("[HalfSize] 完成，共生成 " + created + " 个 50% 预览合成，并已选中");
+}
+
+// 获取 Project 面板里选中的合成；如果没选中任何合成，回退到当前活动合成。
+function OF_Tools_getProjectSelectedComps(){
+    var comps = [];
+    if(!app.project) return comps;
+    for(var i = 1; i <= app.project.items.length; i++){
+        var item = app.project.items[i];
+        if(item instanceof CompItem && item.selected && !OF_Tools_isCacheQueueDataComp(item)){
+            comps.push(item);
+        }
+    }
+    if(comps.length === 0 && app.project.activeItem instanceof CompItem
+        && !OF_Tools_isCacheQueueDataComp(app.project.activeItem)){
+        comps.push(app.project.activeItem);
+    }
+    return comps;
+}
+
 //============ 自动缓存工具 ==========//
 // 缓存队列持久化用的内部 marker comp：不是真正参与合成，只用它的 layer 顺序/enabled
 // 状态编码队列，靠这个名字识别，避免被当成普通合成误处理。

@@ -1,0 +1,2 @@
+# 强制 shell 脚本以 LF 签出，避免 Windows 下 autocrlf 把 build.sh 转成 CRLF 导致 bash 无法执行。
+*.sh text eol=lf
