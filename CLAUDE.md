@@ -18,6 +18,8 @@ After Effects 的 ScriptUI Panel 脚本（作者自用集成工具箱），纯 J
 
 部署：把构建出的 `visnlink.jsx` 复制到 AE 的 `ScriptUI Panels` 目录（主力开发环境为 AE 2024，目录是 `C:\Program Files\Adobe\Adobe After Effects 2024\Support Files\Scripts\ScriptUI Panels`）。本插件默认走「热重载」：脚本文件名固定为 `visnlink.jsx`，AE 每次从「窗口」菜单打开面板时都会重新从磁盘读取该文件，所以改完代码 + `build.sh` + 复制覆盖后，只需在 AE 里**关掉面板再从「窗口」菜单重新打开**即可生效，**无需重启 AE**。只有首次部署（把文件第一次放进目录）或改了脚本文件名时才需要重启 AE 让菜单重新扫描注册。
 
+排障：热重载时若报 `Can not run a script while a modal dialog is waiting for response`，一般是渲染队列（Render Queue）或某个模态设置框还开着，AE 会因此阻止运行脚本；关掉渲染队列和所有弹窗再重开面板即可，该现象偶发（重启 AE 或清空渲染队列后常自行恢复）。
+
 ## 架构
 
 ### 拼接顺序即“加载顺序”

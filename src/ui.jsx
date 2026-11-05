@@ -47,7 +47,8 @@ function UI(object,colorPanel){
                         "mb: Button { text:'MB', preferredSize:[30,25] }, "+
                         "ext: Button { text:'+30s', preferredSize:[35,25] }, "+
                         "lda: Button { text:'LD→A', preferredSize:[40,25] }, "+
-                        "half: Button { text:'50%', preferredSize:[35,25] }"+
+                        "half: Button { text:'50%', preferredSize:[35,25] }, "+
+                        "threePointTail: Button { text:'3.→', preferredSize:[35,25] }"+
                     "},"+
                     "line3: Group {text:'功能', alignment:['fill','top'], orientation:'row', spacing:5 ,"+
                         "line4: Group {text:'功能', alignment:['fill','top'], orientation:'column', spacing:0 ,"+
@@ -309,6 +310,8 @@ function UI(object,colorPanel){
     tp.outsideGroup.line1.lineB.line2.ext.onClick=OF_Tools_extendOutTime30s
     tp.outsideGroup.line1.lineB.line2.lda.onClick=OF_Tools_linearDodgeToAdd
     tp.outsideGroup.line1.lineB.line2.half.onClick=OF_Tools_makeHalfSizeComps
+    tp.outsideGroup.line1.lineB.line2.threePointTail.helpTip="3点动画后段持续：每个属性各选3帧；按时间差/数值差计算，数值图前段弯曲、后段恒速"
+    tp.outsideGroup.line1.lineB.line2.threePointTail.onClick=OF_Tools_threePointTail
 
     // log面板
     myPalette.grp.logGroup.logToggle.onClick=function(){

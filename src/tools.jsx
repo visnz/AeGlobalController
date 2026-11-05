@@ -188,6 +188,185 @@ function OF_Tools_makeHalfSizeComps(){
     OF_Log("[HalfSize] 完成，共生成 " + created + " 个 50% 预览合成，并已选中");
 }
 
+// 三点动画后段持续：操作时间—数值图，每个属性独立计算后段斜率。
+// 每个属性单独要求恰好选中三个关键帧；支持单数值及非空间二维/三维属性。
+function OF_Tools_threePointTail(){
+    var name = "3点动画后段持续";
+    // AE 的时间手柄影响力最小为 0.1%，用它将首尾手柄尽量收回关键帧。
+    var endInfluence = 0.1;
+    var middleInInfluence = 100;
+    var middleOutInfluence = 100 / 3;
+
+    function collect(comp){
+        var found = [];
+        var seen = [];
+        function visit(node, layer){
+            if(!node) return;
+            if(node.propertyType === PropertyType.PROPERTY){
+                var keys;
+                try{ keys = node.selectedKeys; } catch(e){ return; }
+                if(!keys || keys.length === 0) return;
+                for(var s = 0; s < seen.length; s++){
+                    if(seen[s] === node) return;
+                }
+                seen.push(node);
+                found.push({layer:layer, property:node, keys:keys,
+                    label:layer.name + " / " + node.name});
+                return;
+            }
+            var count = node.numProperties || 0;
+            for(var n = 1; n <= count; n++){
+                try{ visit(node.property(n), layer); } catch(e){}
+            }
+        }
+        var layers = comp.selectedLayers;
+        if(!layers || layers.length === 0){
+            layers = [];
+            for(var i = 1; i <= comp.numLayers; i++) layers.push(comp.layer(i));
+        }
+        for(var l = 0; l < layers.length; l++){
+            var layer = layers[l];
+            visit(layer, layer);
+            // 分离维度属性有时不在图层的索引列表里，补读选中属性与 Transform。
+            try{ visit(layer.property("ADBE Transform Group"), layer); } catch(e){}
+            var props = layer.selectedProperties;
+            for(var j = 0; j < props.length; j++){
+                visit(props[j], layer);
+            }
+        }
+        return found;
+    }
+
+    function prepare(entry){
+        var prop = entry.property;
+        if(entry.keys.length !== 3){
+            return {error:"选中 " + entry.keys.length + " 个关键帧，需要 3 个"};
+        }
+        if(prop.expressionEnabled){
+            return {error:"已启用表达式，无法处理"};
+        }
+        var type = prop.propertyValueType;
+        var dimensions = 0;
+        if(type === PropertyValueType.OneD) dimensions = 1;
+        if(type === PropertyValueType.TwoD) dimensions = 2;
+        if(type === PropertyValueType.ThreeD) dimensions = 3;
+        if(!dimensions){
+            return {error:"属性类型不支持；空间位置请先分离维度"};
+        }
+        var indices = [entry.keys[0], entry.keys[1], entry.keys[2]];
+        indices.sort(function(a, b){ return a - b; });
+        var a = indices[0], b = indices[1], c = indices[2];
+        var t0 = prop.keyTime(a), t1 = prop.keyTime(b), t2 = prop.keyTime(c);
+        var v0 = prop.keyValue(a), v1 = prop.keyValue(b), v2 = prop.keyValue(c);
+        if(!(t0 < t1 && t1 < t2)){
+            return {error:"关键帧时间无效"};
+        }
+        if(dimensions === 1){
+            v0 = [v0]; v1 = [v1]; v2 = [v2];
+        }
+        if(!v0 || !v1 || !v2 || v0.length !== dimensions || v1.length !== dimensions || v2.length !== dimensions){
+            return {error:"关键帧数值维度不一致"};
+        }
+
+        var tailSpeed = [], zero = [];
+        for(var d = 0; d < dimensions; d++){
+            if(!isFinite(v0[d]) || !isFinite(v1[d]) || !isFinite(v2[d])){
+                return {error:"关键帧数值无效"};
+            }
+            // 数值图的斜率 = 数值差 / 时间差，下降时保留负号。
+            // 中点入侧用 100% 影响力，其控制点为 (t0, v1 - tailSpeed * (t1 - t0))。
+            // 中点出侧与末帧入侧同用此速度，后段的四个控制点便严格共线。
+            tailSpeed[d] = (v2[d] - v1[d]) / (t2 - t1);
+            zero[d] = 0;
+            if(!isFinite(tailSpeed[d])){
+                return {error:"计算出的速度无效"};
+            }
+        }
+        return {property:prop, a:a, b:b, c:c, tailSpeed:tailSpeed, zero:zero,
+            firstInType:prop.keyInInterpolationType(a),
+            lastOutType:prop.keyOutInterpolationType(c),
+            firstInEase:prop.keyInTemporalEase(a),
+            lastOutEase:prop.keyOutTemporalEase(c)};
+    }
+
+    function makeEase(speeds, influence){
+        var eases = [];
+        for(var i = 0; i < speeds.length; i++){
+            eases.push(new KeyframeEase(speeds[i], influence));
+        }
+        return eases;
+    }
+
+    function apply(item){
+        var prop = item.property;
+        var a = item.a, b = item.b, c = item.c;
+        var bezier = KeyframeInterpolationType.BEZIER;
+        // 保留所选区间外侧的插值与手柄。
+        prop.setInterpolationTypeAtKey(a, item.firstInType, bezier);
+        prop.setInterpolationTypeAtKey(b, bezier, bezier);
+        prop.setInterpolationTypeAtKey(c, bezier, item.lastOutType);
+        prop.setTemporalAutoBezierAtKey(a, false);
+        prop.setTemporalAutoBezierAtKey(b, false);
+        prop.setTemporalAutoBezierAtKey(c, false);
+        // 首尾两侧分开，避免旧的连续标志牵动区间外手柄。
+        // 中点先开启连续，再写入两侧相同的精确速度。
+        prop.setTemporalContinuousAtKey(a, false);
+        prop.setTemporalContinuousAtKey(b, true);
+        prop.setTemporalContinuousAtKey(c, false);
+        prop.setTemporalEaseAtKey(a, item.firstInEase, makeEase(item.zero, endInfluence));
+        prop.setTemporalEaseAtKey(b, makeEase(item.tailSpeed, middleInInfluence),
+            makeEase(item.tailSpeed, middleOutInfluence));
+        // 末帧只缩短手柄；若将入速设为零，后段会弯曲减速。
+        prop.setTemporalEaseAtKey(c, makeEase(item.tailSpeed, endInfluence), item.lastOutEase);
+    }
+
+    if(!app.project || !(app.project.activeItem instanceof CompItem)){
+        OF_Log("[3PointTail] 请先激活一个合成并选中关键帧");
+        return;
+    }
+    var entries = collect(app.project.activeItem);
+    if(entries.length === 0){
+        OF_Log("[3PointTail] 没有选中关键帧");
+        return;
+    }
+    var ready = [], skipped = [];
+    for(var i = 0; i < entries.length; i++){
+        try{
+            var item = prepare(entries[i]);
+            if(item.error){
+                skipped.push(entries[i].label + "：因" + item.error + "，未处理");
+            } else {
+                ready.push({item:item, label:entries[i].label});
+            }
+        } catch(e){
+            skipped.push(entries[i].label + "：检查关键帧失败（" + e.toString() + "），未处理");
+        }
+    }
+    var processed = 0;
+    if(ready.length > 0){
+        var groupOpened = false;
+        try{
+            app.beginUndoGroup(name);
+            groupOpened = true;
+            for(var j = 0; j < ready.length; j++){
+                try{
+                    apply(ready[j].item);
+                    processed++;
+                    OF_Log("[3PointTail] 已处理 " + ready[j].label);
+                } catch(e){
+                    skipped.push(ready[j].label + "：设置手柄失败（" + e.toString() + "），可撤销本次操作");
+                }
+            }
+        } finally {
+            if(groupOpened) app.endUndoGroup();
+        }
+    }
+    OF_Log("[3PointTail] 已处理 " + processed + " 个属性，跳过 " + skipped.length + " 个属性");
+    if(skipped.length > 0){
+        OF_Log("[3PointTail] 已处理 " + processed + " 个属性，跳过：\n" + skipped.join("\n"));
+    }
+}
+
 // 获取 Project 面板里选中的合成；如果没选中任何合成，回退到当前活动合成。
 function OF_Tools_getProjectSelectedComps(){
     var comps = [];
